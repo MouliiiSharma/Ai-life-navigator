@@ -1,0 +1,35 @@
+{
+  "flutter": {
+    "platforms": {
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "ai-life-navigator-27187",
+          "configurations": {
+            "android": "1:866793016648:android:965bf7fa20d7bf5ff3f77d",
+            "web": "1:866793016648:web:fa92c8ebf9dfe5caf3f77d"
+          }
+        }
+      },
+      "android": {
+        "default": {
+          "projectId": "ai-life-navigator-27187",
+          "appId": "1:866793016648:android:965bf7fa20d7bf5ff3f77d",
+          "fileOutput": "android/app/google-services.json"
+        }
+      }
+    }
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ]
+    }
+  ]
+}

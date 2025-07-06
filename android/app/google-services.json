@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "866793016648",
+    "project_id": "ai-life-navigator-27187",
+    "storage_bucket": "ai-life-navigator-27187.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:866793016648:android:965bf7fa20d7bf5ff3f77d",
+        "android_client_info": {
+          "package_name": "com.example.ai_life_navigator"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "866793016648-5k36gccquvkf9p3lcanp11v35t3vbo9d.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.ai_life_navigator",
+            "certificate_hash": "84319e5da75435cfcb47124116cfff7ce7eb048d"
+          }
+        },
+        {
+          "client_id": "866793016648-ocrdpjm9j5ti5qff1a8i5berl8o2u780.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD1o7k3I-YpM7bLT_uPlMOckMBR-9CpZZc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "866793016648-ocrdpjm9j5ti5qff1a8i5berl8o2u780.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "866793016648-nnb1c3scm2jas5a4r5s5kdn55k3dmeuf.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.aiLifeNavigator"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
