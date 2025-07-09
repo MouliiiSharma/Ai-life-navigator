@@ -1,69 +1,13 @@
-import 'package:ai_life_navigator/screens/personal_details.dart';
-import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'dart:convert';
-import '../services/firestore_service.dart';
-import '../services/gemini_service.dart';
-import 'package:intl/intl.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';  // Add this import
+import 'package:http/http.dart' as http;
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../services/gemini_service.dart';
+import '../services/firestore_service.dart';
 
-class ChatMessage {
-  final String text;
-  final bool isUser;
-  final DateTime timestamp;
-  final String? messageType;
-  final Map<String, dynamic>? metadata;
-  
-  ChatMessage({
-    required this.text, 
-    required this.isUser, 
-    DateTime? timestamp,
-    this.messageType,
-    this.metadata,
-  }) : timestamp = timestamp ?? DateTime.now();
-}
-
-class YouTubeVideo {
-  final String title;
-  final String videoId;
-  final String thumbnail;
-  final String channelTitle;
-  final String description;
-
-  YouTubeVideo({
-    required this.title,
-    required this.videoId,
-    required this.thumbnail,
-    required this.channelTitle,
-    required this.description,
-  });
-
-  factory YouTubeVideo.fromJson(Map<String, dynamic> json) {
-    return YouTubeVideo(
-      title: json['snippet']['title'] ?? '',
-      videoId: json['id']['videoId'] ?? '',
-      thumbnail: json['snippet']['thumbnails']['medium']['url'] ?? '',
-      channelTitle: json['snippet']['channelTitle'] ?? '',
-      description: json['snippet']['description'] ?? '',
-    );
-  }
-}
-
-class InternshipOpportunity {
-  final String title;
-  final String company;
-  final String location;
-  final String description;
-  final String url;
-
-  InternshipOpportunity({
-    required this.title,
-    required this.company,
-    required this.location,
-    required this.description,
-    required this.url,
-  });
-}
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -74,933 +18,857 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   final List<ChatMessage> _messages = [];
-  final TextEditingController _controller = TextEditingController();
-  final _firestoreService = FirestoreService();
-
+  final TextEditingController _textController = TextEditingController();
+  final FirestoreService _firestoreService = FirestoreService();
+  final EnhancedGeminiService _geminiService = EnhancedGeminiService();
+  final ScrollController _scrollController = ScrollController();
+  
+  int _questionIndex = 0;
+  Map<String, String> _userResponses = {};
+  bool _isLoading = false;
+  bool _questionsCompleted = false;
+  Map<String, dynamic>? _linkedInData;
+  
   // API Keys
+  static const String _rapidApiKey = '47026e8cd8mshe608e5ef002f184p15c68fjsne74e4980964d';
+  static const String _linkedInApiHost = 'fresh-linkedin-profile-data.p.rapidapi.com';
   static const String _youtubeApiKey = 'AIzaSyCJ8MC7K87Kt-uvUrzRQ1mnWs1iQ7_QawM';
 
-  bool _isTyping = false;
-  bool _onboardingComplete = false;
-  int _currentQuestionIndex = 0;
-
-  final List<Map<String, String>> _questions = [
-    {
-      "question": "Let's start with the basics - What's your name and what date were you born? (DD/MM/YYYY)",
-      "type": "personal_basic"
-    },
-    {
-      "question": "Why did you choose B.Tech? Was it your own decision, family influence, or societal expectations?",
-      "type": "motivation"
-    },
-    {
-      "question": "Which engineering branch are you in, and are you genuinely passionate about it or just going with the flow?",
-      "type": "academic_passion"
-    },
-    {
-      "question": "What subjects make you lose track of time when studying? What topics excite you the most?",
-      "type": "interest_deep"
-    },
-    {
-      "question": "Outside academics, what are your top 3 hobbies? What do you do when you want to relax or feel energized?",
-      "type": "personality_hobbies"
-    },
-    {
-      "question": "When faced with a problem, do you prefer: A) Analyzing data and logic, B) Brainstorming creative solutions, C) Asking others for advice, or D) Taking immediate action?",
-      "type": "problem_solving_style"
-    },
-    {
-      "question": "Do you see yourself as more of an introvert (energized by alone time) or extrovert (energized by social interaction)? Give an example.",
-      "type": "personality_type"
-    },
-    {
-      "question": "What's your biggest strength and your biggest weakness? Be honest - this helps me understand you better.",
-      "type": "self_awareness"
-    },
-    {
-      "question": "Where do you see yourself in 5 years? Job, business, higher studies, or still figuring it out?",
-      "type": "future_vision"
-    },
-    {
-      "question": "On a scale of 1-10, how confident are you about your career path? What's your biggest fear about the future?",
-      "type": "confidence_fears"
-    },
-    {
-      "question": "What kind of work environment energizes you? Fast-paced startup, structured corporate, research lab, or working independently?",
-      "type": "work_preference"
-    },
-    {
-      "question": "Do you prefer to be a leader, a team player, or work solo? Give me an example from your experience.",
-      "type": "leadership_style"
-    }
+  // Your specific questions
+  final List<String> _questions = [
+    "👋 Hi! I'm your AI Life Navigator. Let's start by getting to know you better. What's your name?",
+    "🎓 Which branch are you currently studying in B.Tech?",
+    "💡 Why did you choose your current course or career path (e.g., B.Tech)?",
+    "📚 What subjects or topics do you genuinely enjoy studying or working on?",
+    "🔄 If you could choose a different field, what would it be and why?",
+    "🎯 What are your top 3 interests or hobbies outside academics?",
+    "⚡ What kind of tasks make you feel most productive or excited?",
+    "🚀 Do you see yourself in a job, business, freelancing, or pursuing higher studies in the future?",
+    "📈 On a scale of 1–10, how clear are you about your career goals?",
+    "🧠 Do you prefer logical thinking or creative problem-solving?",
+    "🔧 What type of guidance or features would you like in a life navigator app? (e.g., career advice, time management, personality insights)",
+    "🔗 Do you have a LinkedIn profile? If yes, please share the URL (this will help me provide more personalized recommendations)"
   ];
-
-  final Map<String, String> _answers = {};
-  String _userName = "";
-  String _birthDate = "";
-  String _userField = "";
-  List<String> _userInterests = [];
 
   @override
   void initState() {
     super.initState();
+    _loadChatHistory();
     _startConversation();
   }
 
-  // YouTube API Integration
-  Future<List<YouTubeVideo>> _searchYouTubeVideos(String query) async {
-    try {
-      final response = await http.get(
-        Uri.parse(
-          'https://www.googleapis.com/youtube/v3/search?part=snippet&q=$query&type=video&maxResults=5&key=$_youtubeApiKey'
-        ),
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final List<dynamic> items = data['items'] ?? [];
-        return items.map((item) => YouTubeVideo.fromJson(item)).toList();
-      } else {
-        print('YouTube API Error: ${response.statusCode}');
-        return [];
-      }
-    } catch (e) {
-      print('YouTube API Exception: $e');
-      return [];
-    }
-  }
-
-  // Enhanced Internship Search (mock implementation - you can integrate with your LinkedIn API)
-  Future<List<InternshipOpportunity>> _searchInternships(String field) async {
-    try {
-      // Mock data for demonstration - replace with your LinkedIn API integration
-      await Future.delayed(Duration(milliseconds: 500)); // Simulate API call
-      
-      // You can integrate your LinkedIn API here
-      // final response = await http.get(
-      //   Uri.parse('https://fresh-linkedin-scraper-api.p.rapidapi.com/api/v1/company/affiliated-pages?company_id=1441'),
-      //   headers: {
-      //     'x-rapidapi-host': 'fresh-linkedin-scraper-api.p.rapidapi.com',
-      //     'x-rapidapi-key': _rapidApiKey,
-      //   },
-      // );
-      
-      return [
-        InternshipOpportunity(
-          title: 'Software Engineering Intern',
-          company: 'Tech Corp',
-          location: 'Bangalore',
-          description: 'Work on cutting-edge projects in $field',
-          url: 'https://example.com/internship1',
-        ),
-        InternshipOpportunity(
-          title: 'Data Science Intern',
-          company: 'Analytics Inc',
-          location: 'Mumbai',
-          description: 'Analyze data and build ML models',
-          url: 'https://example.com/internship2',
-        ),
-        InternshipOpportunity(
-          title: 'Product Management Intern',
-          company: 'Startup Hub',
-          location: 'Delhi',
-          description: 'Learn product strategy and development',
-          url: 'https://example.com/internship3',
-        ),
-      ];
-    } catch (e) {
-      print('Internship API Exception: $e');
-      return [];
-    }
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    _textController.dispose();
+    super.dispose();
   }
 
   void _startConversation() {
-    Future.delayed(Duration.zero, () {
+    if (_messages.isEmpty) {
       _addMessage(
-        "Hi! I'm your AI Life Navigator 🌟 I'm here to understand you deeply - like a friend who really gets you - and help guide your career journey. Think of this as a chat with someone who genuinely cares about your future!",
-        isUser: false
+        "Hello! I'm your AI Life Navigator assistant. I'll help you discover the perfect career path by understanding your interests, goals, and aspirations. I'll ask you some questions and then provide personalized recommendations including live internship opportunities, YouTube courses, Google certifications, and higher studies options. Let's begin!",
+        false,
+        messageType: 'intro'
       );
-      
-      Future.delayed(Duration(milliseconds: 1500), () {
-        _addMessage(_questions[_currentQuestionIndex]["question"]!, isUser: false);
+      Future.delayed(const Duration(milliseconds: 1000), () {
+        _askNextQuestion();
       });
-    });
+    }
   }
 
-  void _addMessage(String text, {required bool isUser, String? messageType, Map<String, dynamic>? metadata}) {
+  void _askNextQuestion() {
+    if (_questionIndex < _questions.length) {
+      _addMessage(_questions[_questionIndex], false, messageType: 'question');
+    } else {
+      _questionsCompleted = true;
+      _generateCareerRecommendations();
+    }
+  }
+
+  void _addMessage(String content, bool isUser, {String? messageType}) {
     setState(() {
       _messages.add(ChatMessage(
-        text: text, 
-        isUser: isUser, 
+        content: content,
+        isUser: isUser,
+        timestamp: DateTime.now(),
         messageType: messageType,
-        metadata: metadata,
       ));
     });
     _scrollToBottom();
+    _saveChatToFirebase();
   }
 
   void _scrollToBottom() {
-    Future.delayed(Duration(milliseconds: 100), () {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
-          duration: Duration(milliseconds: 300),
+          duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
       }
     });
   }
 
-  Future<void> _handleUserMessage(String prompt) async {
-    _addMessage(prompt, isUser: true);
+  void _handleSubmitted(String text) {
+    if (text.trim().isEmpty) return;
 
-    if (!_onboardingComplete) {
-      await _handleOnboardingMessage(prompt);
-    } else {
-      await _processFreeChat(prompt);
-    }
+    _addMessage(text, true, messageType: 'answer');
+    _textController.clear();
+    _saveUserResponse(text);
   }
 
-  Future<void> _handleOnboardingMessage(String prompt) async {
-    String questionKey = _questions[_currentQuestionIndex]["question"]!;
-    String questionType = _questions[_currentQuestionIndex]["type"]!;
-    
-    _answers[questionKey] = prompt;
-    
-    // Extract information from specific questions
-    if (questionType == "personal_basic") {
-      _extractPersonalInfo(prompt);
-    } else if (questionType == "academic_passion") {
-      _extractFieldInfo(prompt);
-    } else if (questionType == "interest_deep") {
-      _extractInterests(prompt);
-    }
-
-    _currentQuestionIndex++;
-    if (_currentQuestionIndex < _questions.length) {
-      Future.delayed(Duration(milliseconds: 800), () {
-        String acknowledgment = _getAcknowledgment(questionType, prompt);
-        _addMessage(acknowledgment, isUser: false);
-        
-        Future.delayed(Duration(milliseconds: 1200), () {
-          _addMessage(_questions[_currentQuestionIndex]["question"]!, isUser: false);
-        });
-      });
-    } else {
-      _onboardingComplete = true;
-      await _handleOnboardingComplete();
-    }
-  }
-
-  void _extractPersonalInfo(String response) {
-    List<String> parts = response.split(' ');
-    if (parts.isNotEmpty) {
-      _userName = parts[0];
-    }
-    
-    RegExp dateRegex = RegExp(r'\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}');
-    RegExpMatch? match = dateRegex.firstMatch(response);
-    if (match != null) {
-      _birthDate = match.group(0)!;
-    }
-  }
-
-  void _extractFieldInfo(String response) {
-    _userField = response.toLowerCase();
-  }
-
-  void _extractInterests(String response) {
-    _userInterests = response.split(',').map((e) => e.trim()).toList();
-  }
-
-  String _getAcknowledgment(String questionType, String answer) {
-    switch (questionType) {
-      case "personal_basic":
-        return "Nice to meet you${_userName.isNotEmpty ? ', $_userName' : ''}! 😊";
-      case "motivation":
-        return "That's really insightful - understanding your 'why' is so important!";
-      case "academic_passion":
-        return "Got it! It's totally normal to question your path - that's actually a sign of self-awareness.";
-      case "interest_deep":
-        return "Interesting! Those subjects that make time fly are often clues to your natural strengths.";
-      case "personality_hobbies":
-        return "Love it! Your hobbies reveal a lot about what energizes you.";
-      case "problem_solving_style":
-        return "Perfect! This tells me a lot about how your mind works.";
-      case "personality_type":
-        return "Thanks! Understanding your energy patterns helps me recommend the right environments for you.";
-      case "self_awareness":
-        return "I appreciate your honesty! Self-awareness is actually a superpower.";
-      case "future_vision":
-        return "That gives me a great sense of your aspirations!";
-      case "confidence_fears":
-        return "Thank you for being vulnerable - everyone has fears, and acknowledging them is brave.";
-      case "work_preference":
-        return "Excellent! Environment fit is crucial for long-term happiness.";
-      case "leadership_style":
-        return "Great example! Understanding your collaboration style is key.";
-      default:
-        return "Thanks for sharing that!";
-    }
-  }
-
-  Future<void> _handleOnboardingComplete() async {
-    _addMessage(
-      "Wow! Thank you for sharing so openly with me${_userName.isNotEmpty ? ', $_userName' : ''}! 🙏 Let me now analyze everything you've told me and create a personalized roadmap for you...",
-      isUser: false
-    );
-    
-    setState(() => _isTyping = true);
-
-    try {
-      final profileSummary = _buildComprehensiveProfile();
-      
-      final prompt = """
-You are an expert career counselor and life coach. Based on this detailed student profile, provide comprehensive analysis with clear reasoning.
-
-Student Profile:
-$profileSummary
-
-Please provide:
-
-1. **PERSONALITY ANALYSIS & REASONING**
-   - Analyze their personality type based on their responses
-   - Explain what their answers reveal about their working style
-   - Reasoning: Why you conclude this about their personality
-
-2. **CAREER RECOMMENDATIONS WITH DETAILED REASONING**
-   - Suggest 3-4 specific career paths
-   - For EACH career suggestion, explain:
-     * Why this career fits their personality
-     * How it aligns with their interests and skills
-     * What specific responses led to this recommendation
-     * Examples of roles/companies in this field
-
-3. **SKILL DEVELOPMENT PLAN WITH REASONING**
-   - Specific skills to develop in next 6-12 months
-   - Reasoning: Why these skills based on their career goals and current gaps
-   - How these skills connect to their chosen field
-
-4. **INTERNSHIP/OPPORTUNITY RECOMMENDATIONS WITH REASONING**
-   - Specific types of companies/roles to target
-   - Reasoning: Why these opportunities match their profile
-   - What aspects of their background make them suitable
-
-5. **PERSONAL GROWTH AREAS WITH REASONING**
-   - Areas for development based on their self-assessment
-   - Reasoning: Why these areas need attention based on their responses
-   - How improvement will help their career journey
-
-6. **NEXT STEPS WITH REASONING**
-   - Concrete 30-day action plan
-   - Reasoning: Why these specific steps given their current situation
-   - Priority order and timeline explanation
-
-Make your reasoning specific to their actual responses. Reference their specific answers when explaining recommendations.
-""";
-
-      final aiResponse = await GeminiService.getGeminiResponse(prompt);
-
-      _addMessage("Here's your personalized analysis and roadmap! 🎯", isUser: false);
-      _addMessage(aiResponse, isUser: false);
-      
-      // Add YouTube learning resources
-      await _addYouTubeRecommendations();
-      
-      // Add internship opportunities
-      await _addInternshipRecommendations();
-      
-      setState(() => _isTyping = false);
-
-      String detailedReasoning = _extractReasoningFromResponse(aiResponse, profileSummary);
-
-      await _firestoreService.saveChatMessage("Onboarding Complete", aiResponse);
-      await _firestoreService.saveRecommendation(
-        recommendation: aiResponse,
-        reasoning: detailedReasoning,
-        userProfile: profileSummary,
-        recommendationType: "comprehensive_analysis"
-      );
-
-      Future.delayed(Duration(milliseconds: 2000), () {
-        _addMessage(
-          "Feel free to ask me anything about your roadmap, dive deeper into any area, or ask for more resources! I can help you find learning materials, internships, or career guidance. 💪",
-          isUser: false
-        );
-      });
-
-    } catch (e) {
-      _addMessage("I encountered an error during analysis: ${e.toString()}. Let me try again!", isUser: false);
-      setState(() => _isTyping = false);
-    }
-  }
-
-  Future<void> _addYouTubeRecommendations() async {
-    _addMessage("🎥 Let me find some relevant learning resources for you on YouTube!", isUser: false);
-    
-    setState(() => _isTyping = true);
-    
-    try {
-      String searchQuery = _userField.isNotEmpty ? '$_userField career guide' : 'engineering career guide';
-      if (_userInterests.isNotEmpty) {
-        searchQuery += ' ${_userInterests.first}';
-      }
-      
-      final videos = await _searchYouTubeVideos(searchQuery);
-      
-      if (videos.isNotEmpty) {
-        _addMessage(
-          "Here are some great YouTube videos to help you on your journey:",
-          isUser: false,
-          messageType: "youtube_recommendations",
-          metadata: {"videos": videos.map((v) => {
-            "title": v.title,
-            "videoId": v.videoId,
-            "thumbnail": v.thumbnail,
-            "channelTitle": v.channelTitle,
-            "description": v.description,
-          }).toList()}
-        );
-      } else {
-        _addMessage("I had trouble finding videos right now, but I'll keep helping you with other resources!", isUser: false);
-      }
-    } catch (e) {
-      _addMessage("I couldn't fetch YouTube recommendations right now, but that's okay! Let's continue with other guidance.", isUser: false);
-    }
-    
-    setState(() => _isTyping = false);
-  }
-
-  Future<void> _addInternshipRecommendations() async {
-    _addMessage("💼 Now let me find some internship opportunities that match your profile!", isUser: false);
-    
-    setState(() => _isTyping = true);
-    
-    try {
-      final internships = await _searchInternships(_userField);
-      
-      if (internships.isNotEmpty) {
-        _addMessage(
-          "Here are some internship opportunities that might interest you:",
-          isUser: false,
-          messageType: "internship_recommendations",
-          metadata: {"internships": internships.map((i) => {
-            "title": i.title,
-            "company": i.company,
-            "location": i.location,
-            "description": i.description,
-            "url": i.url,
-          }).toList()}
-        );
-      } else {
-        _addMessage("I'll keep looking for internship opportunities for you! In the meantime, I can help you prepare for applications.", isUser: false);
-      }
-    } catch (e) {
-      _addMessage("I couldn't fetch internship recommendations right now, but I can still help you prepare for your career journey!", isUser: false);
-    }
-    
-    setState(() => _isTyping = false);
-  }
-
-  String _extractReasoningFromResponse(String aiResponse, String userProfile) {
-    StringBuffer reasoning = StringBuffer();
-    
-    List<String> reasoningKeywords = [
-      'reasoning:', 'because', 'based on', 'given that', 'since you mentioned',
-      'your responses indicate', 'this suggests', 'analysis shows'
+  void _saveUserResponse(String response) {
+    List<String> responseKeys = [
+      'name', 'branch', 'course_choice_reason', 'enjoyed_subjects',
+      'different_field', 'interests_hobbies', 'productive_tasks', 'future_vision',
+      'career_clarity', 'thinking_style', 'app_guidance_preference', 'linkedin_url'
     ];
-    
-    List<String> lines = aiResponse.split('\n');
-    List<String> reasoningLines = [];
-    
-    for (String line in lines) {
-      String lowerLine = line.toLowerCase();
-      if (reasoningKeywords.any((keyword) => lowerLine.contains(keyword))) {
-        reasoningLines.add(line.trim());
-      }
-      if (lowerLine.contains('why') || lowerLine.contains('this is') || lowerLine.contains('you are')) {
-        reasoningLines.add(line.trim());
-      }
-    }
-    
-    if (reasoningLines.isNotEmpty) {
-      reasoning.writeln("🔍 **Detailed Analysis Reasoning:**\n");
-      reasoning.writeln(reasoningLines.join('\n\n'));
-      reasoning.writeln("\n${"="*50}\n");
-    }
-    
-    reasoning.writeln("📊 **Profile-Based Reasoning:**");
-    reasoning.writeln("This comprehensive recommendation was generated by analyzing:");
-    reasoning.writeln("• Your academic background and chosen field");
-    reasoning.writeln("• Career motivation and decision-making factors");  
-    reasoning.writeln("• Personal interests and passion areas");
-    reasoning.writeln("• Problem-solving and work style preferences");
-    reasoning.writeln("• Personality traits (introvert/extrovert tendencies)");
-    reasoning.writeln("• Self-assessed strengths and improvement areas");
-    reasoning.writeln("• Future vision and career confidence level");
-    reasoning.writeln("• Preferred work environment and leadership style");
-    
-    return reasoning.toString();
-  }
 
-  Future<void> _processFreeChat(String prompt) async {
-    setState(() => _isTyping = true);
-    
-    // Check if user is asking for specific resources
-    String lowerPrompt = prompt.toLowerCase();
-    
-    if (lowerPrompt.contains('youtube') || lowerPrompt.contains('video') || lowerPrompt.contains('learn')) {
-      await _handleYouTubeRequest(prompt);
-    } else if (lowerPrompt.contains('internship') || lowerPrompt.contains('job') || lowerPrompt.contains('opportunity')) {
-      await _handleInternshipRequest(prompt);
+    if (_questionIndex < responseKeys.length) {
+      _userResponses[responseKeys[_questionIndex]] = response;
+    }
+
+    if (_questionIndex == 11 && response.toLowerCase().contains('linkedin.com')) {
+      _analyzeLinkedInProfile(response);
     } else {
-      await _handleGeneralChat(prompt);
+      _proceedToNextQuestion();
     }
   }
 
-  Future<void> _handleYouTubeRequest(String prompt) async {
-    try {
-      _addMessage("Let me find some relevant videos for you! 🎥", isUser: false);
-      
-      // Extract search terms from the prompt
-      String searchQuery = prompt;
-      if (_userField.isNotEmpty) {
-        searchQuery += ' $_userField';
+  void _proceedToNextQuestion() {
+    _questionIndex++;
+    Future.delayed(const Duration(milliseconds: 800), () {
+      if (!_questionsCompleted) {
+        _askNextQuestion();
       }
-      
-      final videos = await _searchYouTubeVideos(searchQuery);
-      
-      if (videos.isNotEmpty) {
-        _addMessage(
-          "Here are some videos I found for you:",
-          isUser: false,
-          messageType: "youtube_recommendations",
-          metadata: {"videos": videos.map((v) => {
-            "title": v.title,
-            "videoId": v.videoId,
-            "thumbnail": v.thumbnail,
-            "channelTitle": v.channelTitle,
-            "description": v.description,
-          }).toList()}
-        );
-      } else {
-        _addMessage("I couldn't find specific videos for that topic right now, but I can still help you with guidance!", isUser: false);
-      }
-    } catch (e) {
-      _addMessage("I'm having trouble finding videos right now. Let me help you in other ways!", isUser: false);
-    }
-    
-    setState(() => _isTyping = false);
-  }
-
-  Future<void> _handleInternshipRequest(String prompt) async {
-    try {
-      _addMessage("Let me look for internship opportunities for you! 💼", isUser: false);
-      
-      final internships = await _searchInternships(_userField);
-      
-      if (internships.isNotEmpty) {
-        _addMessage(
-          "Here are some internship opportunities:",
-          isUser: false,
-          messageType: "internship_recommendations",
-          metadata: {"internships": internships.map((i) => {
-            "title": i.title,
-            "company": i.company,
-            "location": i.location,
-            "description": i.description,
-            "url": i.url,
-          }).toList()}
-        );
-      } else {
-        _addMessage("I'm working on finding more internship opportunities. In the meantime, I can help you prepare your resume and interview skills!", isUser: false);
-      }
-    } catch (e) {
-      _addMessage("I'm having trouble finding internships right now, but I can help you prepare for applications!", isUser: false);
-    }
-    
-    setState(() => _isTyping = false);
-  }
-
-  Future<void> _handleGeneralChat(String prompt) async {
-    try {
-      final enhancedPrompt = """
-Context: You are chatting with ${_userName.isNotEmpty ? _userName : 'a student'} who has completed onboarding. 
-Previous context: User is a B.Tech student seeking career guidance.
-User's field: $_userField
-User's interests: ${_userInterests.join(', ')}
-
-User Question/Message: $prompt
-
-Please provide a helpful, encouraging, and specific response. If giving advice or recommendations, always explain your reasoning.
-
-Format your response like this:
-1. Direct answer to their question
-2. If giving recommendations, explain WHY you recommend this based on their profile/background
-3. Be actionable and supportive
-
-If the user asks for learning resources, internships, or videos, mention that you can help them find those specifically.
-""";
-
-      final aiResponse = await GeminiService.getGeminiResponse(enhancedPrompt);
-      _addMessage(aiResponse, isUser: false);
-      
-      await _firestoreService.saveChatMessage(prompt, aiResponse);
-
-      if (_containsRecommendation(aiResponse)) {
-        String chatReasoning = _extractChatReasoning(prompt, aiResponse);
-        await _firestoreService.saveRecommendation(
-          recommendation: aiResponse,
-          reasoning: chatReasoning,
-          userProfile: "Chat context: User asked - '$prompt'",
-          recommendationType: "chat_recommendation"
-        );
-      }
-    } catch (e) {
-      _addMessage("I'm having trouble processing that right now. Please try again! 😅", isUser: false);
-    }
-    
-    setState(() => _isTyping = false);
-  }
-
-  String _extractChatReasoning(String userQuestion, String aiResponse) {
-    StringBuffer reasoning = StringBuffer();
-    
-    reasoning.writeln("💬 **Chat-Based Recommendation Reasoning:**\n");
-    reasoning.writeln("**Your Question:** $userQuestion\n");
-    reasoning.writeln("**Why This Recommendation:**");
-    
-    List<String> sentences = aiResponse.split(RegExp(r'[.!?]+'));
-    List<String> reasoningSentences = [];
-    
-    for (String sentence in sentences) {
-      String lower = sentence.toLowerCase().trim();
-      if (lower.contains('because') || lower.contains('since') || 
-          lower.contains('this will help') || lower.contains('given') ||
-          lower.contains('based on') || lower.contains('reason')) {
-        reasoningSentences.add(sentence.trim());
-      }
-    }
-    
-    if (reasoningSentences.isNotEmpty) {
-      reasoning.writeln('${reasoningSentences.join('. ')}.\n');
-    }
-    
-    reasoning.writeln("**Context:** This recommendation was generated in response to your specific question during our conversation, taking into account your individual situation and career goals.\n");
-    reasoning.writeln("**Relevance:** The advice is tailored to address your immediate concern while considering your overall career development path.");
-    
-    return reasoning.toString();
-  }
-
-  String _buildComprehensiveProfile() {
-    StringBuffer profile = StringBuffer();
-    
-    profile.writeln("=== STUDENT PROFILE ===");
-    profile.writeln("Name: $_userName");
-    profile.writeln("Birth Date: $_birthDate");
-    profile.writeln("Field: $_userField");
-    profile.writeln("Interests: ${_userInterests.join(', ')}");
-    profile.writeln();
-    
-    _answers.forEach((question, answer) {
-      profile.writeln("Q: $question");
-      profile.writeln("A: $answer");
-      profile.writeln();
     });
-    
-    return profile.toString();
   }
 
-  bool _containsRecommendation(String response) {
-    List<String> recommendationKeywords = [
-      'recommend', 'suggest', 'should', 'try', 'consider', 
-      'focus on', 'pursue', 'apply for', 'learn', 'develop'
+  Future<void> _analyzeLinkedInProfile(String message) async {
+    RegExp urlRegex = RegExp(r'https?://(?:www\.)?linkedin\.com/in/[a-zA-Z0-9-]+/?');
+    Match? match = urlRegex.firstMatch(message);
+    
+    if (match != null) {
+      String linkedInUrl = match.group(0)!;
+      
+      try {
+        setState(() {
+          _isLoading = true;
+        });
+        
+        _addMessage("🔍 Analyzing your LinkedIn profile for better recommendations...", false, messageType: 'analysis');
+        
+        final response = await http.get(
+          Uri.parse('https://fresh-linkedin-profile-data.p.rapidapi.com/get-profile-public-data?linkedin_url=${Uri.encodeComponent(linkedInUrl)}&include_skills=true&include_certifications=true&include_publications=false&include_honors=false&include_volunteers=false&include_projects=true&include_patents=false&include_courses=false&include_organizations=false&include_profile_status=false&include_company_public_url=false'),
+          headers: {
+            'X-RapidAPI-Key': _rapidApiKey,
+            'X-RapidAPI-Host': _linkedInApiHost,
+          },
+        );
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          _linkedInData = data;
+          
+          String analysisText = "✅ **LINKEDIN PROFILE ANALYZED**\n\n";
+          analysisText += "**Name:** ${data['name'] ?? 'Not available'}\n";
+          analysisText += "**Headline:** ${data['headline'] ?? 'Not available'}\n";
+          analysisText += "**Location:** ${data['location'] ?? 'Not available'}\n";
+          
+          if (data['skills'] != null && data['skills'].isNotEmpty) {
+            List<String> skills = List<String>.from(data['skills']);
+            analysisText += "**Skills:** ${skills.take(8).join(', ')}\n";
+          }
+          
+          if (data['experience'] != null && data['experience'].isNotEmpty) {
+            analysisText += "**Experience:** ${data['experience'].length} positions listed\n";
+          }
+          
+          if (data['education'] != null && data['education'].isNotEmpty) {
+            analysisText += "**Education:** ${data['education'].length} institutions\n";
+          }
+          
+          analysisText += "\n🎯 Perfect! This LinkedIn data will significantly enhance your career recommendations.";
+          
+          _addMessage(analysisText, false, messageType: 'linkedin_analysis');
+          
+          await _firestoreService.saveLinkedInAnalysis(
+            userId: FirebaseAuth.instance.currentUser!.uid,
+            profileData: data,
+            analysisText: analysisText,
+          );
+          
+        } else {
+          _addMessage("⚠️ Couldn't analyze LinkedIn profile (${response.statusCode}). Don't worry, I'll still provide excellent recommendations based on your answers!", false);
+        }
+      } catch (e) {
+        print('LinkedIn analysis error: $e');
+        _addMessage("⚠️ Error analyzing LinkedIn profile. That's okay - I'll provide great recommendations based on your responses!", false);
+      } finally {
+        setState(() {
+          _isLoading = false;
+        });
+        _proceedToNextQuestion();
+      }
+    } else {
+      _addMessage("👍 No problem! I'll provide excellent recommendations based on your responses.", false);
+      _proceedToNextQuestion();
+    }
+  }
+
+  Future<void> _generateCareerRecommendations() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    _addMessage("🎯 Excellent! I have all the information I need. Let me analyze your profile and generate comprehensive career recommendations with live opportunities...", false, messageType: 'processing');
+
+    try {
+      // Step 1: Generate career analysis with Gemini
+      String careerAnalysis = await _generateCareerAnalysis();
+      
+      // Step 2: Get live internships using prompt engineering
+      List<Map<String, dynamic>> internships = await _getLiveInternshipsWithGemini();
+      
+      // Step 3: Get YouTube courses
+      List<Map<String, dynamic>> courses = await _getYouTubeCourses();
+      
+      // Step 4: Get Google certifications with prompt engineering
+      List<Map<String, dynamic>> googleCerts = await _getGoogleCertificationsWithGemini();
+      
+      // Step 5: Get higher studies options
+      String higherStudies = await _getHigherStudiesRecommendations();
+      
+      // Format and display comprehensive recommendations
+      String finalResponse = _formatComprehensiveResponse(
+        careerAnalysis, internships, courses, googleCerts, higherStudies
+      );
+      
+      _addMessage(finalResponse, false, messageType: 'final_recommendations');
+      
+      // Save complete recommendation to Firestore for deep dive analysis
+      await _firestoreService.saveCareerRecommendation(
+        userAnswers: _userResponses,
+        recommendation: careerAnalysis,
+        internships: internships,
+        courses: courses,
+        linkedInAnalysis: _linkedInData,
+      );
+      
+      // Add follow-up message
+      _addMessage(
+        "🎉 **Your personalized career roadmap is ready!** \n\nYou can now:\n• Apply to the recommended internships\n• Start the suggested courses\n• Pursue the Google certifications\n• Explore higher studies options\n\nFeel free to ask me any follow-up questions about these recommendations!",
+        false,
+        messageType: 'follow_up'
+      );
+      
+    } catch (e) {
+      print('Error generating recommendations: $e');
+      _addMessage("❌ I encountered an error generating recommendations. This might be due to API limits or connectivity issues. Please try again in a moment, or ask me specific questions about your career path.", false);
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<String> _generateCareerAnalysis() async {
+    String prompt = """
+    You are an expert career counselor specializing in B.Tech students and considering management opportunities. Analyze this student's comprehensive profile:
+
+    STUDENT PROFILE:
+    Name: ${_userResponses['name'] ?? 'Not provided'}
+    Branch: ${_userResponses['branch'] ?? 'Not provided'}
+    Course Choice Reason: ${_userResponses['course_choice_reason'] ?? 'Not provided'}
+    Enjoyed Subjects: ${_userResponses['enjoyed_subjects'] ?? 'Not provided'}
+    Alternative Field Interest: ${_userResponses['different_field'] ?? 'Not provided'}
+    Interests/Hobbies: ${_userResponses['interests_hobbies'] ?? 'Not provided'}
+    Productive Tasks: ${_userResponses['productive_tasks'] ?? 'Not provided'}
+    Future Vision: ${_userResponses['future_vision'] ?? 'Not provided'}
+    Career Clarity (1-10): ${_userResponses['career_clarity'] ?? 'Not provided'}
+    Thinking Style: ${_userResponses['thinking_style'] ?? 'Not provided'}
+    App Guidance Preference: ${_userResponses['app_guidance_preference'] ?? 'Not provided'}
+
+    ${_linkedInData != null ? 'LINKEDIN DATA AVAILABLE: Yes (Skills: ${_linkedInData!['skills']?.take(5)?.join(', ') ?? 'None'})' : 'LINKEDIN DATA: Not provided'}
+
+    PROVIDE DETAILED ANALYSIS:
+    1. **Career Path Recommendations**: Top 3 most suitable career paths (include management options like Product Management, Business Analysis, Consulting if relevant)
+    2. **Personality & Strengths Analysis**: Key strengths and personality traits
+    3. **Skill Gap Analysis**: Skills they need to develop
+    4. **Industry Alignment**: Which industries match their profile
+    5. **Growth Trajectory**: 5-year career progression path
+
+    Consider that B.Tech students can excel in:
+    - Technical roles (Software Engineer, Data Scientist, etc.)
+    - Management roles (Product Manager, Business Analyst, Consultant)
+    - Entrepreneurship and startups
+    - Research and higher studies
+    - Cross-functional roles combining tech and business
+
+    Format with clear headings and actionable insights.
+    """;
+
+   try {
+  return await EnhancedGeminiService.getGeminiResponse(prompt);
+} catch (e){
+      print('Error generating career analysis: $e');
+      return """
+      **Career Analysis**
+      
+      Based on your profile, here are some general recommendations:
+      
+      **Career Paths:**
+      • Software Development - High demand in tech industry
+      • Product Management - Combines technical and business skills
+      • Data Analysis - Growing field with good opportunities
+      
+      **Skills to Develop:**
+      • Programming languages relevant to your field
+      • Communication and presentation skills
+      • Project management capabilities
+      
+      **Next Steps:**
+      • Build a portfolio of projects
+      • Network with professionals in your field
+      • Consider internships and practical experience
+      
+      Note: This is a simplified analysis due to API limitations. Please try again for a more detailed assessment.
+      """;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _getLiveInternshipsWithGemini() async {
+    // Return fallback internships if API fails
+    return _getFallbackInternships();
+  }
+
+  List<Map<String, dynamic>> _getFallbackInternships() {
+    return [
+      {
+        'title': 'Software Engineering Intern',
+        'company': 'Google',
+        'location': 'Bangalore, India',
+        'description': 'Work on cutting-edge projects with world-class engineers',
+        'skills': 'Programming, Algorithms, Problem Solving',
+        'applyUrl': 'https://careers.google.com/students/'
+      },
+      {
+        'title': 'Product Management Intern',
+        'company': 'Microsoft',
+        'location': 'Hyderabad, India',
+        'description': 'Drive product strategy and work with cross-functional teams',
+        'skills': 'Analytics, Strategy, Communication',
+        'applyUrl': 'https://careers.microsoft.com/students/'
+      },
+      {
+        'title': 'Data Science Intern',
+        'company': 'Amazon',
+        'location': 'Mumbai, India',
+        'description': 'Analyze large datasets and build ML models',
+        'skills': 'Python, Statistics, Machine Learning',
+        'applyUrl': 'https://amazon.jobs/en/teams/internships-for-students'
+      },
+      {
+        'title': 'Business Analyst Intern',
+        'company': 'Flipkart',
+        'location': 'Bangalore, India',
+        'description': 'Analyze business processes and drive improvements',
+        'skills': 'Analytics, Business Strategy, SQL',
+        'applyUrl': 'https://www.flipkartcareers.com/'
+      },
+      {
+        'title': 'Technology Intern',
+        'company': 'Zomato',
+        'location': 'Gurgaon, India',
+        'description': 'Work on food-tech innovations and mobile applications',
+        'skills': 'Mobile Development, APIs, Cloud Computing',
+        'applyUrl': 'https://www.zomato.com/careers'
+      }
     ];
+  }
+
+  Future<List<Map<String, dynamic>>> _getYouTubeCourses() async {
+    List<Map<String, dynamic>> courses = [];
     
-    String lowerResponse = response.toLowerCase();
-    return recommendationKeywords.any((keyword) => lowerResponse.contains(keyword));
+    try {
+      String searchQuery = _generateCourseSearchQuery();
+      
+      final response = await http.get(
+        Uri.parse('https://www.googleapis.com/youtube/v3/search?part=snippet&q=$searchQuery&type=video&maxResults=5&key=$_youtubeApiKey')
+      );
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final items = data['items'] as List;
+        
+        for (var item in items) {
+          courses.add({
+            'title': item['snippet']['title'],
+            'channelName': item['snippet']['channelTitle'],
+            'videoId': item['id']['videoId'],
+            'url': 'https://youtube.com/watch?v=${item['id']['videoId']}',
+            'thumbnail': item['snippet']['thumbnails']['medium']['url'],
+            'description': item['snippet']['description'],
+          });
+        }
+      }
+    } catch (e) {
+      print('Error fetching YouTube courses: $e');
+    }
+    
+    return courses;
   }
 
-  void _handleSend() {
-    final text = _controller.text.trim();
-    if (text.isEmpty) return;
-    _controller.clear();
-    _handleUserMessage(text);
+  String _generateCourseSearchQuery() {
+    String branch = _userResponses['branch']?.toLowerCase() ?? '';
+    String interests = _userResponses['interests_hobbies']?.toLowerCase() ?? '';
+    String subjects = _userResponses['enjoyed_subjects']?.toLowerCase() ?? '';
+    
+    if (branch.contains('computer') || subjects.contains('programming') || interests.contains('coding')) {
+      return 'programming tutorial complete course';
+    } else if (subjects.contains('data') || interests.contains('analytics') || interests.contains('data science')) {
+      return 'data science complete course';
+    } else if (interests.contains('management') || interests.contains('business') || _userResponses['future_vision']?.toLowerCase().contains('management') == true) {
+      return 'business management MBA preparation';
+    } else if (branch.contains('mechanical') || subjects.contains('design')) {
+      return 'mechanical engineering design course';
+    } else if (subjects.contains('electronics') || branch.contains('electronics')) {
+      return 'electronics engineering course';
+    }
+    
+    return 'engineering career guidance course';
   }
 
+  Future<List<Map<String, dynamic>>> _getGoogleCertificationsWithGemini() async {
+    return _getFallbackGoogleCertifications();
+  }
+
+  List<Map<String, dynamic>> _getFallbackGoogleCertifications() {
+    return [
+      {
+        'name': 'Google Data Analytics Professional Certificate',
+        'provider': 'Google via Coursera',
+        'duration': '3-6 months',
+        'skills': 'Data Analysis, SQL, Tableau, R Programming',
+        'url': 'https://www.coursera.org/professional-certificates/google-data-analytics',
+        'value': 'High demand skill with excellent job prospects'
+      },
+      {
+        'name': 'Google Project Management Professional Certificate',
+        'provider': 'Google via Coursera',
+        'duration': '3-6 months',
+        'skills': 'Project Management, Agile, Scrum',
+        'url': 'https://www.coursera.org/professional-certificates/google-project-management',
+        'value': 'Essential for leadership and management roles'
+      },
+      {
+        'name': 'Google Cloud Professional Cloud Architect',
+        'provider': 'Google Cloud',
+        'duration': '2-4 months',
+        'skills': 'Cloud Architecture, GCP, System Design',
+        'url': 'https://cloud.google.com/certification/cloud-architect',
+        'value': 'High-paying cloud computing career path'
+      }
+    ];
+  }
+
+  Future<String> _getHigherStudiesRecommendations() async {
+    try {
+      String prompt = """
+      Based on this B.Tech student's profile, provide detailed higher studies recommendations:
+
+      Student Profile:
+      - Branch: ${_userResponses['branch']}
+      - Career Clarity: ${_userResponses['career_clarity']}/10
+      - Future Vision: ${_userResponses['future_vision']}
+      - Interests: ${_userResponses['interests_hobbies']}
+      - Thinking Style: ${_userResponses['thinking_style']}
+
+      Provide recommendations for:
+      1. **M.Tech Specializations**: Specific specializations with top colleges
+      2. **MBA Programs**: When to pursue, specializations, top colleges
+      3. **MS Abroad**: Countries, universities, specializations
+      4. **Professional Courses**: Industry-specific certifications
+      5. **Research Opportunities**: PhD options, research areas
+
+      Consider both technical and management paths. Include specific college names and admission requirements.
+      """;
+
+      return await EnhancedGeminiService.getGeminiResponse(prompt);
+    } catch (e) {
+      print('Error getting higher studies recommendations: $e');
+      return "**Higher Studies Options:**\n\n• **M.Tech**: Specialize in your area of interest\n• **MBA**: For management and leadership roles\n• **MS Abroad**: International exposure and opportunities\n• **Professional Certifications**: Industry-specific skills";
+    }
+  }
+
+  String _formatComprehensiveResponse(
+    String careerAnalysis,
+    List<Map<String, dynamic>> internships,
+    List<Map<String, dynamic>> courses,
+    List<Map<String, dynamic>> googleCerts,
+    String higherStudies
+  ) {
+    String response = "# 🎯 YOUR PERSONALIZED CAREER ROADMAP\n\n";
+    
+    response += careerAnalysis;
+    response += "\n\n---\n\n";
+    
+    response += "# 🚀 LIVE INTERNSHIP OPPORTUNITIES\n\n";
+    response += "*Apply to these current openings:*\n\n";
+    
+    for (int i = 0; i < internships.length && i < 5; i++) {
+      var internship = internships[i];
+      response += "## ${i + 1}. ${internship['title']}\n";
+      response += "**🏢 Company:** ${internship['company']}\n";
+      response += "**📍 Location:** ${internship['location']}\n";
+      response += "**💼 Description:** ${internship['description']}\n";
+      response += "**🛠️ Skills:** ${internship['skills']}\n";
+      response += "**🔗 Apply:** ${internship['applyUrl']}\n\n";
+    }
+    
+    response += "---\n\n";
+    
+    if (courses.isNotEmpty) {
+      response += "# 📚 RECOMMENDED YOUTUBE COURSES\n\n";
+      for (int i = 0; i < courses.length && i < 3; i++) {
+        var course = courses[i];
+        response += "**${i + 1}. ${course['title']}**\n";
+        response += "Channel: ${course['channelName']}\n";
+        response += "🔗 ${course['url']}\n\n";
+      }
+      response += "---\n\n";
+    }
+    
+    response += "# 🏆 GOOGLE CERTIFICATIONS\n\n";
+    for (int i = 0; i < googleCerts.length && i < 3; i++) {
+      var cert = googleCerts[i];
+      response += "## ${i + 1}. ${cert['name']}\n";
+      response += "**Provider:** ${cert['provider']}\n";
+      response += "**Duration:** ${cert['duration']}\n";
+      response += "**Skills:** ${cert['skills']}\n";
+      response += "**Why valuable:** ${cert['value']}\n";
+      response += "**🔗 Enroll:** ${cert['url']}\n\n";
+    }
+    
+    response += "---\n\n";
+    
+    response += "# 🎓 HIGHER STUDIES OPTIONS\n\n";
+    response += higherStudies;
+    
+    return response;
+  }
+
+  Future<void> _loadChatHistory() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final chatHistory = await _firestoreService.getChatHistory(user.uid);
+        if (chatHistory != null) {
+          setState(() {
+            _messages.clear();
+            _messages.addAll(chatHistory['messages'] ?? []);
+            _userResponses = chatHistory['userAnswers'] ?? {};
+            _questionIndex = _userResponses.length;
+            _questionsCompleted = _questionIndex >= _questions.length;
+          });
+        }
+      }
+    } catch (e) {
+      print('Error loading chat history: $e');
+    }
+  }
+
+  Future<void> _saveChatToFirebase() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await _firestoreService.saveChatSession(
+          userId: user.uid,
+          messages: _messages,
+          userAnswers: _userResponses,
+          timestamp: DateTime.now(),
+        );
+      }
+    } catch (e) {
+      print('Error saving chat: $e');
+    }
+  }
+
+  // Method to launch URLs
   Future<void> _launchUrl(String url) async {
-    if (await canLaunchUrl(Uri.parse(url))) {
-      await launchUrl(Uri.parse(url));
+    final Uri uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not open link')),
+        SnackBar(content: Text('Could not launch $url')),
       );
     }
-  }
-
-  Widget _buildMessageWidget(ChatMessage message) {
-    if (message.messageType == "youtube_recommendations") {
-      return _buildYouTubeRecommendationWidget(message);
-    } else if (message.messageType == "internship_recommendations") {
-      return _buildInternshipRecommendationWidget(message);
-    } else {
-      return _buildRegularMessageWidget(message);
-    }
-  }
-
-  Widget _buildYouTubeRecommendationWidget(ChatMessage message) {
-    final videos = message.metadata?['videos'] as List<dynamic>? ?? [];
-    
-    return Container(
-      alignment: Alignment.centerLeft,
-      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildRegularMessageWidget(message),
-          SizedBox(height: 8),
-          Container(
-            height: 200,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: videos.length,
-              itemBuilder: (context, index) {
-                final video = videos[index];
-                return Container(
-                  width: 280,
-                  margin: EdgeInsets.only(right: 12),
-                  child: Card(
-                    child: InkWell(
-                      onTap: () => _launchUrl('https://www.youtube.com/watch?v=${video['videoId']}'),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            height: 120,
-                            width: double.infinity,
-                            child: Image.network(
-                              video['thumbnail'],
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) => 
-                                Container(
-                                  color: Colors.grey.shade300, 
-                                  child: Icon(Icons.play_circle_outline, size: 40, color: Colors.grey),
-                                ),
-                            ),
-                          ),
-                          Padding(
-                            padding: EdgeInsets.all(8),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  video['title'],
-                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                SizedBox(height: 4),
-                                 Text(
-                                  video['channelTitle'],
-                                  style: TextStyle(fontSize: 11, color: Colors.grey[700]),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                SizedBox(height: 4),
-                                Text(
-                                  video['description'],
-                                  style: TextStyle(fontSize: 10, color: Colors.grey[600]),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInternshipRecommendationWidget(ChatMessage message) {
-    final internships = message.metadata?['internships'] as List<dynamic>? ?? [];
-
-    return Container(
-      alignment: Alignment.centerLeft,
-      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildRegularMessageWidget(message),
-          SizedBox(height: 8),
-          ListView.builder(
-            shrinkWrap: true,
-            physics: NeverScrollableScrollPhysics(),
-            itemCount: internships.length,
-            itemBuilder: (context, index) {
-              final internship = internships[index];
-              return Card(
-                margin: EdgeInsets.only(bottom: 10),
-                child: ListTile(
-                  title: Text(
-                    internship['title'],
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('${internship['company']} • ${internship['location']}',
-                          style: TextStyle(fontSize: 12, color: Colors.grey[700])),
-                      SizedBox(height: 4),
-                      Text(
-                        internship['description'],
-                        style: TextStyle(fontSize: 12),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                  trailing: IconButton(
-                    icon: Icon(Icons.open_in_new),
-                    onPressed: () => _launchUrl(internship['url']),
-                  ),
-                  onTap: () => _launchUrl(internship['url']),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRegularMessageWidget(ChatMessage message) {
-    final isUser = message.isUser;
-    final timeString =
-        DateFormat('hh:mm a').format(message.timestamp);
-
-    return Align(
-      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.8),
-        margin: EdgeInsets.symmetric(vertical: 4),
-        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: isUser ? Theme.of(context).primaryColorLight : Colors.grey.shade200,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          crossAxisAlignment:
-              isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-          children: [
-            Text(
-              message.text,
-              style: TextStyle(
-                color: isUser ? Colors.black : Colors.black87,
-                fontSize: 15,
-              ),
-            ),
-            SizedBox(height: 4),
-            Text(
-              timeString,
-              style: TextStyle(fontSize: 10, color: Colors.grey[600]),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('AI Life Navigator'),
+        title: const Text('AI Career Navigator'),
+        backgroundColor: Colors.blue[700],
+        foregroundColor: Colors.white,
+        elevation: 2,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Start New Session'),
+                  content: const Text('This will clear your current conversation. Are you sure?'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        setState(() {
+                          _messages.clear();
+                          _userResponses.clear();
+                          _questionIndex = 0;
+                          _questionsCompleted = false;
+                          _linkedInData = null;
+                        });
+                        _startConversation();
+                      },
+                      child: const Text('Start New'),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
       ),
       body: Column(
         children: [
-          Expanded(
-            child: ListView.builder( 
-              controller: _scrollController,
-              itemCount: _messages.length,
-              itemBuilder: (context, index) {
-                final message = _messages[index];
-                return _buildMessageWidget(message);
-              },
-            ),
-          ),
-          if (_isTyping)
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          if (!_questionsCompleted)
+            Container(
+              padding: const EdgeInsets.all(16),
+              color: Colors.blue[50],
               child: Row(
                 children: [
-                  CircularProgressIndicator(strokeWidth: 2),
-                  SizedBox(width: 12),
-                  Text("Thinking...", style: TextStyle(color: Colors.grey[600])),
+                  Text(
+                    'Question ${_questionIndex + 1} of ${_questions.length}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue[700],
+                    ),
+                  ),
+                  const Spacer(),
+                  SizedBox(
+                    width: 100,
+                    child: LinearProgressIndicator(
+                      value: (_questionIndex + 1) / _questions.length,
+                      backgroundColor: Colors.blue[100],
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.blue[700]!),
+                    ),
+                  ),
                 ],
               ),
             ),
-          Padding(
-            padding: EdgeInsets.only(
-                left: 10, right: 10, bottom: MediaQuery.of(context).padding.bottom + 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    onSubmitted: (_) => _handleSend(),
-                    decoration: InputDecoration(
-                      hintText: _onboardingComplete
-                          ? "Type your message..."
-                          : "Answer the question...",
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(18),
-                        borderSide: BorderSide.none,
-                      ),
-                      filled: true,
-                      fillColor: Colors.grey[100],
-                      contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-                    ),
-                  ),
-                ),
-                SizedBox(width: 8),
-                IconButton(
-                  icon: Icon(Icons.send, color: Theme.of(context).primaryColor),
-                  onPressed: _isTyping ? null : _handleSend,
-                ),
-              ],
+          
+          Expanded(
+            child: ListView.builder(
+              controller: _scrollController,
+              padding: const EdgeInsets.all(16),
+              itemCount: _messages.length,
+              itemBuilder: (context, index) {
+                return _buildMessageBubble(_messages[index]);
+              },
             ),
+          ),
+          
+          if (_isLoading)
+            Container(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(width: 16),
+                  Text(
+                    _questionsCompleted 
+                      ? 'Generating your personalized recommendations...'
+                      : 'Processing your response...',
+                    style: const TextStyle(fontStyle: FontStyle.italic),
+                  ),
+                ],
+              ),
+            ),
+          
+          _buildMessageInput(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMessageBubble(ChatMessage message) {
+    bool isQuestion = message.messageType == 'question';
+    bool isRecommendation = message.messageType == 'final_recommendations';
+    
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        mainAxisAlignment: message.isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (!message.isUser) ...[
+            CircleAvatar(
+              backgroundColor: isQuestion ? Colors.orange[700] : Colors.blue[700],
+              child: Icon(
+                isQuestion ? Icons.help_outline : Icons.smart_toy,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
+          Flexible(
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: message.isUser 
+                  ? Colors.blue[700] 
+                  : isRecommendation 
+                    ? Colors.green[50]
+                    : isQuestion 
+                      ? Colors.orange[50]
+                      : Colors.grey[200],
+                borderRadius: BorderRadius.circular(16),
+                border: isRecommendation 
+                  ? Border.all(color: Colors.green[300]!, width: 1)
+                  : null,
+              ),
+              child: _buildMessageContent(message),
+            ),
+          ),
+          if (message.isUser) ...[
+            const SizedBox(width: 8),
+            CircleAvatar(
+              backgroundColor: Colors.grey[400],
+              child: const Icon(Icons.person, color: Colors.white),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMessageContent(ChatMessage message) {
+    // Check if message contains URLs
+    final urlRegex = RegExp(r'https?://[^\s]+');
+    final matches = urlRegex.allMatches(message.content);
+    
+    if (matches.isEmpty) {
+      return Text(
+        message.content,
+        style: TextStyle(
+          color: message.isUser ? Colors.white : Colors.black87,
+          fontSize: 16,
+          fontWeight: message.messageType == 'final_recommendations' ? FontWeight.w500 : FontWeight.normal,
+        ),
+      );
+    }
+
+    // Build rich text with clickable links
+    List<TextSpan> spans = [];
+    int lastEnd = 0;
+    
+    for (final match in matches) {
+      // Add text before the URL
+      if (match.start > lastEnd) {
+        spans.add(TextSpan(
+          text: message.content.substring(lastEnd, match.start),
+          style: TextStyle(
+            color: message.isUser ? Colors.white : Colors.black87,
+            fontSize: 16,
+          ),
+        ));
+      }
+      
+      // Add clickable URL
+      spans.add(TextSpan(
+        text: match.group(0),
+        style: TextStyle(
+          color: message.isUser ? Colors.blue[100] : Colors.blue[700],
+          fontSize: 16,
+          decoration: TextDecoration.underline,
+        ),
+        recognizer: TapGestureRecognizer()
+          ..onTap = () => _launchUrl(match.group(0)!),
+      ));
+      
+      lastEnd = match.end;
+    }
+    
+    // Add remaining text
+    if (lastEnd < message.content.length) {
+      spans.add(TextSpan(
+        text: message.content.substring(lastEnd),
+        style: TextStyle(
+          color: message.isUser ? Colors.white : Colors.black87,
+          fontSize: 16,
+        ),
+      ));
+    }
+    
+    return RichText(
+      text: TextSpan(children: spans),
+    );
+  }
+
+  Widget _buildMessageInput() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.2),
+            spreadRadius: 1,
+            blurRadius: 5,
+            offset: const Offset(0, -3),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _textController,
+              decoration: InputDecoration(
+                hintText: _questionsCompleted 
+                  ? 'Ask me anything about your career...'
+                  : 'Type your answer...',
+                border: const OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(25)),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+              onSubmitted: _handleSubmitted,
+              maxLines: null,
+              enabled: !_isLoading,
+            ),
+          ),
+          const SizedBox(width: 8),
+          FloatingActionButton(
+            onPressed: _isLoading ? null : () => _handleSubmitted(_textController.text),
+            mini: true,
+            backgroundColor: _isLoading ? Colors.grey : Colors.blue[700],
+            child: const Icon(Icons.send, color: Colors.white),
           ),
         ],
       ),
     );
   }
-}
-
-extension on bool {
-  double get maxScrollExtent => null;
-}
-
-class GeminiService {
-  static Future<String> getGeminiResponse(String prompt) async {
-    // Placeholder for Gemini API call
-    // Replace with actual API call logic
-    await Future.delayed(Duration(seconds: 1)); // Simulate network delay
-    return "This is a simulated response for the prompt: $prompt";
-  }
-}
-
-class _scrollController {
-  static ScrollController get hasClients => ScrollController();
-  static void animateTo(double maxScrollExtent, {required Duration duration, required Curve curve}) {
-    // Placeholder for scroll animation logic
-  }
-  static bool get position => true;
 }

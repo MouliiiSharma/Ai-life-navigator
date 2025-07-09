@@ -67,3 +67,4 @@ class DefaultFirebaseOptions {
     storageBucket: 'ai-life-navigator-27187.firebasestorage.app',
   );
 }
+

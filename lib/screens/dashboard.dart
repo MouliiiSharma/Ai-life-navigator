@@ -1,9 +1,9 @@
 // dashboard.dart
 import 'package:ai_life_navigator/screens/deep_dive.dart';
+import 'package:ai_life_navigator/screens/career_prediction_screen.dart';
 import 'package:flutter/material.dart';
 import 'personal_details.dart';
 import 'ai_assistant.dart';
-import 'career_prediction_screen.dart';
 import 'settings.dart';
 
 class Dashboard extends StatefulWidget {
@@ -73,6 +73,7 @@ class _DashboardState extends State<Dashboard> {
         type: BottomNavigationBarType.fixed,
         selectedItemColor: Colors.blue.shade600,
         unselectedItemColor: Colors.grey,
+        
       ),
     );
   }
@@ -93,4 +94,4 @@ class _DashboardState extends State<Dashboard> {
         return "Dashboard";
     }
   }
-}
+} // This closing brace was missing!

@@ -529,3 +529,4 @@ class EnhancedGeminiService {
     }
   }
 }
+

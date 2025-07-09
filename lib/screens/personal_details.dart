@@ -39,6 +39,10 @@ class FirestoreService {
   Future<void> deleteRecommendation(String recommendationId) async {}
 
   Future<void> markRecommendationAsRead(String recommendationId) async {}
+
+  Future<void> saveChatMessage(String prompt, String aiResponse) async {}
+
+  Future<void> saveRecommendation(userId, {required String recommendation, required String reasoning, required String userProfile, required String recommendationType}) async {}
 }
 
 class PersonalDetailsScreen extends StatefulWidget {

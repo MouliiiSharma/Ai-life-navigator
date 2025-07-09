@@ -1,547 +1,594 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../services/gemini_service.dart';
 
-// Response Models
-class EnhancedChatResponse {
-  final String geminiResponse;
-  final List<CareerPrediction> careerPaths;
-  final List<InternshipOpportunity> internships;
-  final List<YouTubeCourse> courses;
-  final List<GoogleCertification> certifications;
+class ChatMessage {
+  final String content;
+  final bool isUser;
   final DateTime timestamp;
+  final String? messageType;
 
-  EnhancedChatResponse({
-    required this.geminiResponse,
-    required this.careerPaths,
-    required this.internships,
-    required this.courses,
-    required this.certifications,
+  ChatMessage({
+    required this.content,
+    required this.isUser,
     required this.timestamp,
+    this.messageType,
   });
 
-  Map<String, dynamic> toJson() {
+  Map<String, dynamic> toMap() {
     return {
-      'geminiResponse': geminiResponse,
-      'careerPaths': careerPaths.map((e) => e.toJson()).toList(),
-      'internships': internships.map((e) => e.toJson()).toList(),
-      'courses': courses.map((e) => e.toJson()).toList(),
-      'certifications': certifications.map((e) => e.toJson()).toList(),
+      'content': content,
+      'isUser': isUser,
       'timestamp': timestamp.toIso8601String(),
+      'messageType': messageType,
     };
   }
-}
 
-class CareerPrediction {
-  final String careerPath;
-  final double confidence;
-  final String description;
-  final List<String> requiredSkills;
-
-  CareerPrediction({
-    required this.careerPath,
-    required this.confidence,
-    required this.description,
-    required this.requiredSkills,
-  });
-
-  Map<String, dynamic> toJson() {
-    return {
-      'careerPath': careerPath,
-      'confidence': confidence,
-      'description': description,
-      'requiredSkills': requiredSkills,
-    };
-  }
-}
-
-class InternshipOpportunity {
-  final String title;
-  final String company;
-  final String location;
-  final String url;
-  final String description;
-  final String type; // remote, onsite, hybrid
-
-  InternshipOpportunity({
-    required this.title,
-    required this.company,
-    required this.location,
-    required this.url,
-    required this.description,
-    required this.type,
-  });
-
-  Map<String, dynamic> toJson() {
-    return {
-      'title': title,
-      'company': company,
-      'location': location,
-      'url': url,
-      'description': description,
-      'type': type,
-    };
-  }
-}
-
-class YouTubeCourse {
-  final String title;
-  final String channelName;
-  final String videoId;
-  final String thumbnail;
-  final String duration;
-  final String description;
-
-  YouTubeCourse({
-    required this.title,
-    required this.channelName,
-    required this.videoId,
-    required this.thumbnail,
-    required this.duration,
-    required this.description,
-  });
-
-  String get videoUrl => 'https://www.youtube.com/watch?v=$videoId';
-
-  Map<String, dynamic> toJson() {
-    return {
-      'title': title,
-      'channelName': channelName,
-      'videoId': videoId,
-      'thumbnail': thumbnail,
-      'duration': duration,
-      'description': description,
-    };
-  }
-}
-
-class GoogleCertification {
-  final String title;
-  final String provider;
-  final String url;
-  final String description;
-  final String estimatedTime;
-  final bool isFree;
-
-  GoogleCertification({
-    required this.title,
-    required this.provider,
-    required this.url,
-    required this.description,
-    required this.estimatedTime,
-    required this.isFree,
-  });
-
-  Map<String, dynamic> toJson() {
-    return {
-      'title': title,
-      'provider': provider,
-      'url': url,
-      'description': description,
-      'estimatedTime': estimatedTime,
-      'isFree': isFree,
-    };
-  }
-}
-
-class UserProfile {
-  final String branch;
-  final String skills;
-  final double cgpa;
-  final String interests;
-  final String goals;
-  final String whyBtech;
-
-  UserProfile({
-    required this.branch,
-    required this.skills,
-    required this.cgpa,
-    required this.interests,
-    required this.goals,
-    required this.whyBtech,
-  });
-}
-
-class EnhancedGeminiService {
-  static const String _geminiApiKey = 'AIzaSyAolU9wBgaWS0Gt7HAWIpDKXlc695_mlzU';
-  static const String _youtubeApiKey = 'AIzaSyCJ8MC7K87Kt-uvUrzRQ1mnWs1iQ7_QawM';
-  static const String _rapidApiKey = '47026e8cd8mshe608e5ef002f184p15c68fjsne74e4980964d';
-  
-  static const String _geminiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=$_geminiApiKey';
-  static const String _youtubeUrl = 'https://www.googleapis.com/youtube/v3/search';
-  static const String _linkedinUrl = 'https://fresh-linkedin-scraper-api.p.rapidapi.com/api/v1/search/jobs';
-
-  // Main method for comprehensive career guidance
-  static Future<EnhancedChatResponse> getComprehensiveGuidance(
-    String userQuery, 
-    UserProfile userProfile
-  ) async {
-    try {
-      // Step 1: Get enhanced Gemini response with career analysis
-      final geminiResponse = await _getEnhancedGeminiResponse(userQuery, userProfile);
-      
-      // Step 2: Extract career keywords and predictions from response
-      final careerPredictions = await _extractCareerPredictions(geminiResponse);
-      
-      // Step 3: Get career keywords for API searches
-      final careerKeywords = _extractCareerKeywords(careerPredictions);
-      
-      // Step 4: Make parallel API calls
-      final futures = await Future.wait([
-        _getInternshipOpportunities(careerKeywords),
-        _getYouTubeCourses(careerKeywords),
-        _getGoogleCertifications(careerKeywords),
-      ]);
-      
-      final internships = futures[0] as List<InternshipOpportunity>;
-      final courses = futures[1] as List<YouTubeCourse>;
-      final certifications = futures[2] as List<GoogleCertification>;
-      
-      return EnhancedChatResponse(
-        geminiResponse: geminiResponse,
-        careerPaths: careerPredictions,
-        internships: internships,
-        courses: courses,
-        certifications: certifications,
-        timestamp: DateTime.now(),
-      );
-    } catch (e) {
-      print('Error in comprehensive guidance: $e');
-      // Return basic response with error handling
-      return EnhancedChatResponse(
-        geminiResponse: 'Sorry, I encountered an error while processing your request. Please try again.',
-        careerPaths: [],
-        internships: [],
-        courses: [],
-        certifications: [],
-        timestamp: DateTime.now(),
-      );
-    }
-  }
-
-  // Enhanced Gemini response with career analysis
-  static Future<String> _getEnhancedGeminiResponse(String userQuery, UserProfile userProfile) async {
-    final enhancedPrompt = '''
-    You are an AI Life Navigator for B.Tech students. Based on the user profile and query, provide comprehensive career guidance.
-
-    User Profile:
-    - Branch: ${userProfile.branch}
-    - Skills: ${userProfile.skills}
-    - CGPA: ${userProfile.cgpa}
-    - Interests: ${userProfile.interests}
-    - Goals: ${userProfile.goals}
-    - Why B.Tech: ${userProfile.whyBtech}
-
-    User Query: $userQuery
-
-    Please provide:
-    1. Career path analysis and recommendations
-    2. Specific job roles that match their profile
-    3. Skills they should develop
-    4. Industry insights and trends
-    5. Actionable next steps
-
-    Format your response to be conversational and encouraging. Include specific career paths like "Software Engineer", "Data Scientist", "Product Manager", etc.
-    ''';
-
-    final response = await http.post(
-      Uri.parse(_geminiUrl),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        "contents": [
-          {
-            "parts": [
-              {"text": enhancedPrompt}
-            ]
-          }
-        ]
-      }),
+  factory ChatMessage.fromMap(Map<String, dynamic> map) {
+    return ChatMessage(
+      content: map['content'] ?? '',
+      isUser: map['isUser'] ?? false,
+      timestamp: DateTime.parse(map['timestamp']),
+      messageType: map['messageType'],
     );
-
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      return data['candidates']?[0]?['content']?['parts']?[0]?['text'] ??
-          "Sorry, couldn't understand the response.";
-    } else {
-      throw Exception('Failed to fetch response from Gemini');
-    }
   }
-
-  // Extract career predictions from Gemini response
-  static Future<List<CareerPrediction>> _extractCareerPredictions(String geminiResponse) async {
-    final analysisPrompt = '''
-    Analyze this career guidance response and extract specific career paths mentioned:
-    
-    "$geminiResponse"
-    
-    Return ONLY a JSON array of career predictions in this exact format:
-    [
-      {
-        "careerPath": "Software Engineer",
-        "confidence": 0.85,
-        "description": "Brief description of the role",
-        "requiredSkills": ["Java", "Python", "Problem Solving"]
-      }
-    ]
-    
-    Include 3-5 career paths with confidence scores between 0.1 and 1.0.
-    ''';
-
-    try {
-      final response = await http.post(
-        Uri.parse(_geminiUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          "contents": [
-            {
-              "parts": [
-                {"text": analysisPrompt}
-              ]
-            }
-          ]
-        }),
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final responseText = data['candidates']?[0]?['content']?['parts']?[0]?['text'] ?? '';
-        
-        // Extract JSON from response
-        final jsonMatch = RegExp(r'\[.*\]', dotAll: true).firstMatch(responseText);
-        if (jsonMatch != null) {
-          final jsonStr = jsonMatch.group(0)!;
-          final List<dynamic> careerData = jsonDecode(jsonStr);
-          
-          return careerData.map((item) => CareerPrediction(
-            careerPath: item['careerPath'] ?? 'Unknown',
-            confidence: (item['confidence'] ?? 0.5).toDouble(),
-            description: item['description'] ?? 'No description available',
-            requiredSkills: List<String>.from(item['requiredSkills'] ?? []),
-          )).toList();
-        }
-      }
-    } catch (e) {
-      print('Error extracting career predictions: $e');
-    }
-    
-    // Fallback career predictions
-    return [
-      CareerPrediction(
-        careerPath: 'Software Engineer',
-        confidence: 0.8,
-        description: 'Develop software applications and systems',
-        requiredSkills: ['Programming', 'Problem Solving', 'System Design'],
-      ),
-    ];
-  }
-
-  // Extract career keywords for API searches
-  static List<String> _extractCareerKeywords(List<CareerPrediction> predictions) {
-    final keywords = <String>[];
-    for (final prediction in predictions) {
-      keywords.add(prediction.careerPath);
-      keywords.addAll(prediction.requiredSkills);
-    }
-    return keywords.take(10).toList(); // Limit to top 10 keywords
-  }
-
-  // Get internship opportunities from LinkedIn API
-  static Future<List<InternshipOpportunity>> _getInternshipOpportunities(List<String> keywords) async {
-    final internships = <InternshipOpportunity>[];
-    
-    for (final keyword in keywords.take(3)) { // Limit API calls
-      try {
-        final response = await http.get(
-          Uri.parse('$_linkedinUrl?keywords=$keyword&location=India&job_type=internship'),
-          headers: {
-            'X-RapidAPI-Key': _rapidApiKey,
-            'X-RapidAPI-Host': 'fresh-linkedin-scraper-api.p.rapidapi.com',
-          },
-        );
-
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
-          final jobs = data['data']?['jobs'] ?? [];
-          
-          for (final job in jobs.take(2)) { // Limit to 2 per keyword
-            internships.add(InternshipOpportunity(
-              title: job['title'] ?? 'Internship Opportunity',
-              company: job['company']?['name'] ?? 'Company',
-              location: job['location'] ?? 'Location not specified',
-              url: job['url'] ?? 'https://linkedin.com',
-              description: job['description'] ?? 'No description available',
-              type: job['workplace_type'] ?? 'Not specified',
-            ));
-          }
-        }
-      } catch (e) {
-        print('Error fetching internships for $keyword: $e');
-      }
-    }
-    
-    // Ensure we have at least 5 internships (add mock data if needed)
-    if (internships.length < 5) {
-      internships.addAll(_getMockInternships(5 - internships.length));
-    }
-    
-    return internships.take(5).toList();
-  }
-
-  // Get YouTube courses
-  static Future<List<YouTubeCourse>> _getYouTubeCourses(List<String> keywords) async {
-    final courses = <YouTubeCourse>[];
-    
-    for (final keyword in keywords.take(3)) {
-      try {
-        final searchQuery = '$keyword tutorial course';
-        final response = await http.get(
-          Uri.parse('$_youtubeUrl?part=snippet&q=$searchQuery&type=video&maxResults=2&key=$_youtubeApiKey'),
-        );
-
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
-          final videos = data['items'] ?? [];
-          
-          for (final video in videos) {
-            courses.add(YouTubeCourse(
-              title: video['snippet']['title'] ?? 'Course',
-              channelName: video['snippet']['channelTitle'] ?? 'Channel',
-              videoId: video['id']['videoId'] ?? '',
-              thumbnail: video['snippet']['thumbnails']['medium']['url'] ?? '',
-              duration: 'Duration not available',
-              description: video['snippet']['description'] ?? 'No description',
-            ));
-          }
-        }
-      } catch (e) {
-        print('Error fetching YouTube courses for $keyword: $e');
-      }
-    }
-    
-    return courses.take(5).toList();
-  }
-
-  // Get Google certifications using Gemini
-  static Future<List<GoogleCertification>> _getGoogleCertifications(List<String> keywords) async {
-    final certificationPrompt = '''
-    Based on these career keywords: ${keywords.join(', ')}
-    
-    Provide 3-5 relevant FREE Google certifications and courses. Return ONLY JSON in this format:
-    [
-      {
-        "title": "Google Data Analytics Professional Certificate",
-        "provider": "Google via Coursera",
-        "url": "https://coursera.org/professional-certificates/google-data-analytics",
-        "description": "Learn data analytics fundamentals",
-        "estimatedTime": "3-6 months",
-        "isFree": true
-      }
-    ]
-    
-    Include Google Career Certificates, Google Cloud certifications, and Google Digital Marketing courses.
-    ''';
-
-    try {
-      final response = await http.post(
-        Uri.parse(_geminiUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          "contents": [
-            {
-              "parts": [
-                {"text": certificationPrompt}
-              ]
-            }
-          ]
-        }),
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final responseText = data['candidates']?[0]?['content']?['parts']?[0]?['text'] ?? '';
-        
-        final jsonMatch = RegExp(r'\[.*\]', dotAll: true).firstMatch(responseText);
-        if (jsonMatch != null) {
-          final jsonStr = jsonMatch.group(0)!;
-          final List<dynamic> certData = jsonDecode(jsonStr);
-          
-          return certData.map((item) => GoogleCertification(
-            title: item['title'] ?? 'Google Certification',
-            provider: item['provider'] ?? 'Google',
-            url: item['url'] ?? 'https://google.com',
-            description: item['description'] ?? 'No description available',
-            estimatedTime: item['estimatedTime'] ?? 'Not specified',
-            isFree: item['isFree'] ?? true,
-          )).toList();
-        }
-      }
-    } catch (e) {
-      print('Error fetching Google certifications: $e');
-    }
-    
-    // Fallback certifications
-    return [
-      GoogleCertification(
-        title: 'Google Career Certificates',
-        provider: 'Google via Coursera',
-        url: 'https://grow.google/certificates/',
-        description: 'Professional certificates in high-growth fields',
-        estimatedTime: '3-6 months',
-        isFree: true,
-      ),
-    ];
-  }
-
-  // Mock internships for fallback
-  static List<InternshipOpportunity> _getMockInternships(int count) {
-    return List.generate(count, (index) => InternshipOpportunity(
-      title: 'Software Development Internship',
-      company: 'Tech Company ${index + 1}',
-      location: 'India',
-      url: 'https://linkedin.com/jobs/internship-${index + 1}',
-      description: 'Exciting internship opportunity in software development',
-      type: 'Hybrid',
-    ));
-  }
-
-  // Simple Gemini response (for backward compatibility)
-  static Future<String> getGeminiResponse(String prompt) async {
-    final response = await http.post(
-      Uri.parse(_geminiUrl),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        "contents": [
-          {
-            "parts": [
-              {"text": prompt}
-            ]
-          }
-        ]
-      }),
-    );
-
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      return data['candidates']?[0]?['content']?['parts']?[0]?['text'] ??
-          "Sorry, couldn't understand the response.";
-    } else {
-      print("Gemini error: ${response.body}");
-      throw Exception('Failed to fetch response from Gemini');
-    }
-  }
-}Future<void> saveChatMessage(String prompt, String response) async {
-  await FirebaseFirestore.instance.collection('chatMessages').add({
-    'prompt': prompt,
-    'response': response,
-    'timestamp': FieldValue.serverTimestamp(),
-  });
 }
 
-Future<void> saveRecommendation(Map<String, dynamic> recommendation) async {
-  await FirebaseFirestore.instance.collection('recommendations').add({
-    ...recommendation,
-    'timestamp': FieldValue.serverTimestamp(),
-  });
+class FirestoreService {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final EnhancedGeminiService _geminiService = EnhancedGeminiService();
+
+  // Get current user ID
+  String? get currentUserId => _auth.currentUser?.uid;
+
+  // Save complete chat session with user answers
+  Future<void> saveChatSession({
+    required String userId,
+    required List<ChatMessage> messages,
+    required Map<String, String> userAnswers,
+    required DateTime timestamp,
+  }) async {
+    try {
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('chat_sessions')
+          .add({
+        'messages': messages.map((msg) => msg.toMap()).toList(),
+        'userAnswers': userAnswers,
+        'timestamp': Timestamp.fromDate(timestamp),
+        'sessionType': 'career_guidance',
+      });
+    } catch (e) {
+      print('Error saving chat session: $e');
+      throw e;
+    }
+  }
+
+  // Get latest chat history
+  Future<Map<String, dynamic>?> getChatHistory(String userId) async {
+    try {
+      final querySnapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('chat_sessions')
+          .orderBy('timestamp', descending: true)
+          .limit(1)
+          .get();
+
+      if (querySnapshot.docs.isNotEmpty) {
+        final data = querySnapshot.docs.first.data();
+        return {
+          'messages': (data['messages'] as List)
+              .map((msg) => ChatMessage.fromMap(msg))
+              .toList(),
+          'userAnswers': Map<String, String>.from(data['userAnswers'] ?? {}),
+        };
+      }
+      return null;
+    } catch (e) {
+      print('Error getting chat history: $e');
+      return null;
+    }
+  }
+
+  // Save LinkedIn profile analysis
+  Future<void> saveLinkedInAnalysis({
+    required String userId,
+    required Map<String, dynamic> profileData,
+    required String analysisText,
+  }) async {
+    try {
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('linkedin_analysis')
+          .add({
+        'profileData': profileData,
+        'analysisText': analysisText,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      print('Error saving LinkedIn analysis: $e');
+      throw e;
+    }
+  }
+
+  // Save internship recommendations
+  Future<void> saveInternshipRecommendations({
+    required String userId,
+    required List<Map<String, dynamic>> internships,
+    required String searchQuery,
+  }) async {
+    try {
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('internship_recommendations')
+          .add({
+        'internships': internships,
+        'searchQuery': searchQuery,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      print('Error saving internship recommendations: $e');
+      throw e;
+    }
+  }
+
+  // Get user profile
+  Future<Map<String, dynamic>?> getUserProfile() async {
+    try {
+      if (currentUserId == null) return null;
+      
+      final doc = await _firestore
+          .collection('users')
+          .doc(currentUserId)
+          .get();
+      
+      return doc.exists ? doc.data() : null;
+    } catch (e) {
+      print('Error getting user profile: $e');
+      return null;
+    }
+  }
+
+  // Save user profile
+  Future<void> saveUserProfile(Map<String, dynamic> profileData) async {
+    try {
+      if (currentUserId == null) return;
+      
+      await _firestore
+          .collection('users')
+          .doc(currentUserId)
+          .set(profileData, SetOptions(merge: true));
+    } catch (e) {
+      print('Error saving user profile: $e');
+      throw e;
+    }
+  }
+
+  // Get recommendations history
+  Future<List<Map<String, dynamic>>> getRecommendationsHistory() async {
+    try {
+      if (currentUserId == null) return [];
+      
+      final snapshot = await _firestore
+          .collection('users')
+          .doc(currentUserId)
+          .collection('recommendations')
+          .orderBy('timestamp', descending: true)
+          .get();
+      
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        data['id'] = doc.id;
+        return data;
+      }).toList();
+    } catch (e) {
+      print('Error getting recommendations: $e');
+      return [];
+    }
+  }
+
+  // Save career recommendation for deep dive analysis
+  Future<void> saveCareerRecommendation({
+    required Map<String, String> userAnswers,
+    required String recommendation,
+    required List<Map<String, dynamic>> internships,
+    required List<Map<String, dynamic>> courses,
+    required Map<String, dynamic>? linkedInAnalysis,
+  }) async {
+    try {
+      if (currentUserId == null) return;
+      
+      await _firestore
+          .collection('users')
+          .doc(currentUserId)
+          .collection('recommendations')
+          .add({
+        'userAnswers': userAnswers,
+        'recommendation': recommendation,
+        'internships': internships,
+        'courses': courses,
+        'linkedInAnalysis': linkedInAnalysis,
+        'timestamp': FieldValue.serverTimestamp(),
+        'type': 'career_guidance',
+        'is_read': false,
+      });
+    } catch (e) {
+      print('Error saving career recommendation: $e');
+      throw e;
+    }
+  }
+
+  // Generate career prediction based on user profile
+  Future<Map<String, dynamic>> generateCareerPrediction({
+    required Map<String, dynamic> userProfile,
+    required String chatContext,
+  }) async {
+    try {
+      final userId = _auth.currentUser?.uid;
+      if (userId == null) throw Exception('User not authenticated');
+
+      // Create comprehensive prompt for career prediction
+      String prompt = """
+      You are an expert career counselor and psychologist specializing in B.Tech students. 
+      Based on this user's complete profile and chat context, provide a detailed career prediction with clear reasoning.
+
+      User Profile: ${userProfile.toString()}
+      Chat Context: $chatContext
+
+      Provide a comprehensive analysis including:
+      1. **Most Suitable Career Path**: Primary recommendation with specific role titles
+      2. **Detailed Reasoning**: Why this career path is perfect for them (analyze their responses, interests, skills)
+      3. **Personality Analysis**: Key personality traits that led to this recommendation
+      4. **Skills Development Plan**: Specific skills they should focus on and why
+      5. **Timeline & Progression**: 1-year, 3-year, and 5-year career milestones
+      6. **Potential Challenges**: What obstacles they might face and how to overcome them
+      7. **Alternative Paths**: 2-3 backup career options if primary doesn't work out
+
+      Be specific, actionable, and provide clear reasoning for every recommendation.
+      Consider both technical and management career paths for B.Tech students.
+      """;
+
+      // Generate prediction using Gemini
+      String prediction =  await EnhancedGeminiService.getGeminiResponse(prompt);
+      
+      // Extract detailed reasoning from the prediction
+      String reasoning = _extractDetailedReasoning(prediction, userProfile);
+
+      // Save to Firestore with enhanced data structure
+      final docRef = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('recommendations')
+          .add({
+        'type': 'career_prediction',
+        'recommendation': prediction,
+        'reasoning': reasoning,
+        'user_profile': userProfile,
+        'chat_context': chatContext,
+        'timestamp': FieldValue.serverTimestamp(),
+        'is_read': false,
+        'prediction_confidence': 'high',
+        'analysis_version': '2.0',
+      });
+
+      return {
+        'id': docRef.id,
+        'recommendation': prediction,
+        'reasoning': reasoning,
+        'type': 'career_prediction',
+        'timestamp': DateTime.now(),
+      };
+    } catch (e) {
+      print('Error generating career prediction: $e');
+      throw e;
+    }
+  }
+
+  // Generate comprehensive analysis
+  Future<Map<String, dynamic>> generateComprehensiveAnalysis() async {
+    try {
+      final userId = _auth.currentUser?.uid;
+      if (userId == null) throw Exception('User not authenticated');
+
+      // Get user's complete data
+      final userProfile = await getUserProfile() ?? {};
+      final chatHistory = await getChatHistory(userId);
+      final linkedInData = await _getLatestLinkedInAnalysis(userId);
+      
+      String prompt = """
+      You are an expert career psychologist and life coach. Provide a comprehensive personality and career analysis.
+
+      User Profile: ${userProfile.toString()}
+      Chat History: ${chatHistory?.toString() ?? 'No chat history available'}
+      LinkedIn Data: ${linkedInData?.toString() ?? 'No LinkedIn data available'}
+
+      Provide a detailed comprehensive analysis including:
+      1. **Personality Assessment**: MBTI-style analysis, strengths, weaknesses
+      2. **Career Compatibility Analysis**: How their personality aligns with different careers
+      3. **Detailed Career Recommendations**: Top 3 career paths with specific reasoning
+      4. **Skill Gap Analysis**: Current skills vs required skills for recommended careers
+      5. **Learning Path**: Specific courses, certifications, and experiences needed
+      6. **Long-term Career Strategy**: 5-10 year career roadmap
+      7. **Personal Development Areas**: Soft skills and areas for improvement
+      8. **Industry Insights**: Market trends affecting their recommended careers
+
+      Provide specific, actionable insights with clear reasoning for each recommendation.
+      Consider the user's complete digital footprint and conversation history.
+      """;
+
+      String analysis =  await EnhancedGeminiService.getGeminiResponse(prompt);
+      String reasoning = _extractComprehensiveReasoning(analysis, userProfile, chatHistory);
+
+      // Save comprehensive analysis to Firestore
+      final docRef = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('recommendations')
+          .add({
+        'type': 'comprehensive_analysis',
+        'recommendation': analysis,
+        'reasoning': reasoning,
+        'user_profile': userProfile,
+        'chat_history': chatHistory,
+        'linkedin_data': linkedInData,
+        'timestamp': FieldValue.serverTimestamp(),
+        'is_read': false,
+        'analysis_depth': 'comprehensive',
+        'data_sources': ['profile', 'chat', 'linkedin'].where((s) => 
+          s == 'profile' || 
+          (s == 'chat' && chatHistory != null) || 
+          (s == 'linkedin' && linkedInData != null)
+        ).toList(),
+      });
+
+      return {
+        'id': docRef.id,
+        'recommendation': analysis,
+        'reasoning': reasoning,
+        'type': 'comprehensive_analysis',
+        'timestamp': DateTime.now(),
+      };
+    } catch (e) {
+      print('Error generating comprehensive analysis: $e');
+      throw e;
+    }
+  }
+
+  // Mark recommendation as read
+  Future<void> markRecommendationAsRead(String recommendationId) async {
+    try {
+      final userId = _auth.currentUser?.uid;
+      if (userId == null) throw Exception('User not authenticated');
+
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('recommendations')
+          .doc(recommendationId)
+          .update({
+        'is_read': true,
+        'read_at': FieldValue.serverTimestamp(),
+        'last_accessed': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      print('Error marking recommendation as read: $e');
+      throw e;
+    }
+  }
+
+  // Delete recommendation
+  Future<void> deleteRecommendation(String recommendationId) async {
+    try {
+      final userId = _auth.currentUser?.uid;
+      if (userId == null) throw Exception('User not authenticated');
+
+      // Add to deleted_recommendations for potential recovery
+      final docSnapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('recommendations')
+          .doc(recommendationId)
+          .get();
+
+      if (docSnapshot.exists) {
+        // Archive before deleting
+        await _firestore
+            .collection('users')
+            .doc(userId)
+            .collection('deleted_recommendations')
+            .add({
+          ...docSnapshot.data()!,
+          'deleted_at': FieldValue.serverTimestamp(),
+          'original_id': recommendationId,
+        });
+
+        // Now delete the original
+        await _firestore
+            .collection('users')
+            .doc(userId)
+            .collection('recommendations')
+            .doc(recommendationId)
+            .delete();
+      }
+    } catch (e) {
+      print('Error deleting recommendation: $e');
+      throw e;
+    }
+  }
+
+  // Helper method to get latest LinkedIn analysis
+  Future<Map<String, dynamic>?> _getLatestLinkedInAnalysis(String userId) async {
+    try {
+      final snapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('linkedin_analysis')
+          .orderBy('timestamp', descending: true)
+          .limit(1)
+          .get();
+
+      if (snapshot.docs.isNotEmpty) {
+        return snapshot.docs.first.data();
+      }
+      return null;
+    } catch (e) {
+      print('Error getting LinkedIn analysis: $e');
+      return null;
+    }
+  }
+
+  // Helper method to extract detailed reasoning from career prediction
+  String _extractDetailedReasoning(String prediction, Map<String, dynamic> userProfile) {
+    // Look for reasoning patterns in the prediction
+    List<String> reasoningKeywords = [
+      'because', 'since', 'due to', 'given that', 'considering',
+      'based on', 'this is recommended because', 'the reason is',
+      'this will help', 'given your', 'taking into account',
+      'your responses indicate', 'analysis shows', 'this suggests'
+    ];
+
+    List<String> sentences = prediction.split(RegExp(r'[.!?]+'));
+    List<String> reasoningSentences = [];
+
+    for (String sentence in sentences) {
+      String lowerSentence = sentence.toLowerCase().trim();
+      if (lowerSentence.isNotEmpty &&
+          reasoningKeywords.any((keyword) => lowerSentence.contains(keyword))) {
+        reasoningSentences.add(sentence.trim());
+      }
+    }
+
+    if (reasoningSentences.isNotEmpty) {
+      return reasoningSentences.take(5).join('. ').trim() + '.';
+    }
+
+    // Enhanced fallback reasoning based on user profile
+    String branch = userProfile['branch'] ?? 'Engineering';
+    String interests = userProfile['interests_hobbies'] ?? 'various interests';
+    String careerClarity = userProfile['career_clarity'] ?? 'moderate';
+    
+    return """
+    This career prediction is based on comprehensive analysis of your profile:
+    
+    **Academic Background**: Your $branch background provides a strong foundation for technical and analytical roles.
+    
+    **Interest Analysis**: Your interests in $interests align well with careers that combine technical skills with creative problem-solving.
+    
+    **Career Clarity**: With a clarity level of $careerClarity, the AI identified paths that match your current understanding while providing growth opportunities.
+    
+    **Personality Fit**: Your responses indicate a personality type that thrives in environments requiring both logical thinking and innovative solutions.
+    
+    The AI analyzed your complete conversation history, academic background, and personal interests to provide this tailored career guidance.
+    """;
+  }
+
+  // Helper method to extract comprehensive reasoning
+  String _extractComprehensiveReasoning(
+    String analysis, 
+    Map<String, dynamic> userProfile, 
+    Map<String, dynamic>? chatHistory
+  ) {
+    // Look for analysis and reasoning sections
+    if (analysis.toLowerCase().contains('reasoning') || 
+        analysis.toLowerCase().contains('because') ||
+        analysis.toLowerCase().contains('analysis shows') ||
+        analysis.toLowerCase().contains('based on your')) {
+      
+      List<String> sentences = analysis.split(RegExp(r'[.!?]+'));
+      List<String> reasoningSentences = [];
+
+      for (String sentence in sentences) {
+        String lowerSentence = sentence.toLowerCase().trim();
+        if (lowerSentence.contains('reasoning') || 
+            lowerSentence.contains('analysis') ||
+            lowerSentence.contains('because') ||
+            lowerSentence.contains('indicates') ||
+            lowerSentence.contains('suggests') ||
+            lowerSentence.contains('based on') ||
+            lowerSentence.contains('your profile shows')) {
+          reasoningSentences.add(sentence.trim());
+        }
+      }
+
+      if (reasoningSentences.isNotEmpty) {
+        return reasoningSentences.take(6).join('. ').trim() + '.';
+      }
+    }
+
+    // Enhanced fallback comprehensive reasoning
+    bool hasLinkedIn = userProfile.containsKey('linkedin_url');
+    bool hasChatHistory = chatHistory != null && chatHistory.isNotEmpty;
+    
+    return """
+    This comprehensive analysis combines multiple data sources to provide personalized career guidance:
+    
+    **Profile Analysis**: Your academic background, interests, and career goals were thoroughly analyzed to understand your strengths and preferences.
+    
+    **Conversation Insights**: ${hasChatHistory ? 'Your detailed responses during our conversation revealed key personality traits and career inclinations.' : 'The analysis focused on your profile data and preferences.'}
+    
+    **Professional Background**: ${hasLinkedIn ? 'Your LinkedIn profile data enhanced the analysis with real-world professional context.' : 'The analysis used your academic and personal information to build career recommendations.'}
+    
+    **Personality Assessment**: The AI performed a holistic assessment of your thinking style, work preferences, and career clarity to match you with suitable opportunities.
+    
+    **Market Alignment**: Current industry trends and job market conditions were considered to ensure the recommendations are practical and future-ready.
+    
+    This multi-dimensional analysis ensures that the career guidance is tailored specifically to your unique profile and circumstances.
+    """;
+  }
+
+  // Additional helper method to get recommendation details for deep dive
+  Future<Map<String, dynamic>?> getRecommendationDetails(String recommendationId) async {
+    try {
+      final userId = _auth.currentUser?.uid;
+      if (userId == null) return null;
+
+      final doc = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('recommendations')
+          .doc(recommendationId)
+          .get();
+
+      if (doc.exists) {
+        final data = doc.data()!;
+        data['id'] = doc.id;
+        return data;
+      }
+      return null;
+    } catch (e) {
+      print('Error getting recommendation details: $e');
+      return null;
+    }
+  }
+
+  // Update recommendation with user feedback
+  Future<void> updateRecommendationFeedback({
+    required String recommendationId,
+    required Map<String, dynamic> feedback,
+  }) async {
+    try {
+      final userId = _auth.currentUser?.uid;
+      if (userId == null) throw Exception('User not authenticated');
+
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('recommendations')
+          .doc(recommendationId)
+          .update({
+        'user_feedback': feedback,
+        'feedback_timestamp': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      print('Error updating recommendation feedback: $e');
+      throw e;
+    }
+  }
 }
 
 
