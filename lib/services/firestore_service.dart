@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 // Response Models
 class EnhancedChatResponse {
@@ -528,4 +529,19 @@ class EnhancedGeminiService {
       throw Exception('Failed to fetch response from Gemini');
     }
   }
+}Future<void> saveChatMessage(String prompt, String response) async {
+  await FirebaseFirestore.instance.collection('chatMessages').add({
+    'prompt': prompt,
+    'response': response,
+    'timestamp': FieldValue.serverTimestamp(),
+  });
 }
+
+Future<void> saveRecommendation(Map<String, dynamic> recommendation) async {
+  await FirebaseFirestore.instance.collection('recommendations').add({
+    ...recommendation,
+    'timestamp': FieldValue.serverTimestamp(),
+  });
+}
+
+

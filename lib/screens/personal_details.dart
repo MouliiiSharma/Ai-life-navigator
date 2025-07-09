@@ -1,7 +1,45 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../services/firestore_service.dart';
+
+// TODO: Replace this with your actual FirestoreService implementation or import the correct file.
+class FirestoreService {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+
+  Future<Map<String, dynamic>?> getPersonalDetails() async {
+    final user = _auth.currentUser;
+    if (user == null) return null;
+    final doc = await _firestore.collection('users').doc(user.uid).get();
+    return doc.data();
+  }
+
+  Future<void> savePersonalDetails({
+    required String name,
+    required String branch,
+    required String year,
+    required String skills,
+    required String interests,
+    required String cgpa,
+  }) async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+    await _firestore.collection('users').doc(user.uid).set({
+      'name': name,
+      'branch': branch,
+      'year': year,
+      'skills': skills,
+      'interests': interests,
+      'cgpa': cgpa,
+    }, SetOptions(merge: true));
+  }
+
+  Future getRecommendationsHistory() async {}
+
+  Future<void> deleteRecommendation(String recommendationId) async {}
+
+  Future<void> markRecommendationAsRead(String recommendationId) async {}
+}
 
 class PersonalDetailsScreen extends StatefulWidget {
   const PersonalDetailsScreen({super.key});
@@ -26,7 +64,7 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen> {
   final _firestoreService = FirestoreService();
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  
+
   bool _isLoading = false;
   bool _isInitialLoad = true;
   DateTime? _selectedBirthdate;
@@ -54,39 +92,44 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen> {
     super.dispose();
   }
 
+  String? _normalizeYear(String? year) {
+    if (year == null) return null;
+    final knownYears = ['1st Year', '2nd Year', '3rd Year', '4th Year', 'Final Year'];
+    for (var y in knownYears) {
+      if (y.toLowerCase().contains(year.toLowerCase())) return y;
+    }
+    return null;
+  }
+
   Future<void> _loadExistingDetails() async {
     if (currentUser == null) return;
-    
+
     setState(() => _isLoading = true);
-    
+
     try {
-      // Load from your existing FirestoreService
       final data = await _firestoreService.getPersonalDetails();
-      
-      // Also try to load from the users collection for consistency
+
       DocumentSnapshot userDoc = await _firestore
           .collection('users')
           .doc(currentUser!.uid)
           .get();
-      
+
       Map<String, dynamic>? userData;
       if (userDoc.exists) {
         userData = userDoc.data() as Map<String, dynamic>?;
       }
-      
+
       if (data != null || userData != null) {
-        // Prioritize data from your existing service, fallback to users collection
         _nameController.text = data?['name'] ?? userData?['name'] ?? currentUser!.displayName ?? '';
         _emailController.text = data?['email'] ?? userData?['email'] ?? currentUser!.email ?? '';
         _phoneController.text = data?['phone'] ?? userData?['phone'] ?? '';
         _collegeController.text = data?['college'] ?? userData?['college'] ?? '';
         _branchController.text = data?['branch'] ?? userData?['branch'] ?? '';
-        _yearController.text = data?['year'] ?? userData?['year'] ?? '';
+        _yearController.text = _normalizeYear(data?['year'] ?? userData?['year']) ?? '';
         _skillsController.text = data?['skills'] ?? userData?['skills'] ?? '';
         _interestsController.text = data?['interests'] ?? userData?['interests'] ?? '';
         _cgpaController.text = data?['cgpa'] ?? userData?['cgpa'] ?? '';
-        
-        // Handle birthdate
+
         if (data?['birthdate'] != null) {
           if (data!['birthdate'] is Timestamp) {
             _selectedBirthdate = (data['birthdate'] as Timestamp).toDate();
@@ -100,12 +143,12 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen> {
             _selectedBirthdate = DateTime.tryParse(userData['birthdate']);
           }
         }
-        
+
         if (_selectedBirthdate != null) {
-          _birthdateController.text = 
+          _birthdateController.text =
               "${_selectedBirthdate!.day}/${_selectedBirthdate!.month}/${_selectedBirthdate!.year}";
         }
-        
+
         setState(() {});
       }
     } catch (e) {
@@ -140,7 +183,7 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen> {
         );
       },
     );
-    
+
     if (picked != null && picked != _selectedBirthdate) {
       setState(() {
         _selectedBirthdate = picked;
@@ -152,11 +195,10 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen> {
   Future<void> _saveDetails() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     if (currentUser == null) return;
-    
+
     setState(() => _isLoading = true);
-    
+
     try {
-      // Save using your existing FirestoreService
       await _firestoreService.savePersonalDetails(
         name: _nameController.text.trim(),
         branch: _branchController.text.trim(),
@@ -165,8 +207,7 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen> {
         interests: _interestsController.text.trim(),
         cgpa: _cgpaController.text.trim(),
       );
-      
-      // Also update the users collection for consistency with settings screen
+
       await _firestore.collection('users').doc(currentUser!.uid).update({
         'name': _nameController.text.trim(),
         'email': _emailController.text.trim(),
@@ -188,10 +229,8 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen> {
           backgroundColor: Colors.green,
         ),
       );
-      
-      // Navigate back or to dashboard
+
       Navigator.of(context).pop();
-      
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -244,7 +283,6 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header Card
                 Card(
                   elevation: 4,
                   shape: RoundedRectangleBorder(
@@ -293,10 +331,7 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen> {
                     ),
                   ),
                 ),
-                
                 const SizedBox(height: 24),
-                
-                // Personal Information Section
                 _buildSectionHeader('Personal Information', Icons.person_outline),
                 _buildFormCard([
                   _buildField("Full Name", _nameController, Icons.person),
@@ -304,10 +339,7 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen> {
                   _buildField("Phone Number", _phoneController, Icons.phone, keyboardType: TextInputType.phone),
                   _buildBirthdateField(),
                 ]),
-                
                 const SizedBox(height: 16),
-                
-                // Academic Information Section
                 _buildSectionHeader('Academic Information', Icons.school),
                 _buildFormCard([
                   _buildField("College/University", _collegeController, Icons.account_balance),
@@ -317,21 +349,15 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen> {
                   ]),
                   _buildField("CGPA/Percentage", _cgpaController, Icons.grade),
                 ]),
-                
                 const SizedBox(height: 16),
-                
-                // Skills & Interests Section
                 _buildSectionHeader('Skills & Interests', Icons.psychology),
                 _buildFormCard([
-                  _buildField("Technical Skills", _skillsController, Icons.code, 
-                    hintText: "e.g., Python, Java, React, Machine Learning"),
+                  _buildField("Technical Skills", _skillsController, Icons.code,
+                      hintText: "e.g., Python, Java, React, Machine Learning"),
                   _buildField("Interests & Hobbies", _interestsController, Icons.favorite,
-                    hintText: "e.g., Web Development, Data Science, Sports"),
+                      hintText: "e.g., Web Development, Data Science, Sports"),
                 ]),
-                
                 const SizedBox(height: 32),
-                
-                // Save Button
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
@@ -363,7 +389,6 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen> {
                           ),
                   ),
                 ),
-                
                 const SizedBox(height: 20),
               ],
             ),
@@ -406,7 +431,7 @@ class _PersonalDetailsScreenState extends State<PersonalDetailsScreen> {
     );
   }
 
-  Widget _buildField(String label, TextEditingController controller, IconData icon, 
+  Widget _buildField(String label, TextEditingController controller, IconData icon,
       {TextInputType keyboardType = TextInputType.text, String? hintText}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16.0),

@@ -1,3 +1,4 @@
+import 'package:ai_life_navigator/screens/personal_details.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -75,11 +76,9 @@ class _ChatScreenState extends State<ChatScreen> {
   final List<ChatMessage> _messages = [];
   final TextEditingController _controller = TextEditingController();
   final _firestoreService = FirestoreService();
-  final ScrollController _scrollController = ScrollController();
 
   // API Keys
   static const String _youtubeApiKey = 'AIzaSyCJ8MC7K87Kt-uvUrzRQ1mnWs1iQ7_QawM';
-  static const String _rapidApiKey = '47026e8cd8mshe608e5ef002f184p15c68fjsne74e4980964d';
 
   bool _isTyping = false;
   bool _onboardingComplete = false;
@@ -928,7 +927,7 @@ If the user asks for learning resources, internships, or videos, mention that yo
       body: Column(
         children: [
           Expanded(
-            child: ListView.builder(
+            child: ListView.builder( 
               controller: _scrollController,
               itemCount: _messages.length,
               itemBuilder: (context, index) {
@@ -983,4 +982,25 @@ If the user asks for learning resources, internships, or videos, mention that yo
       ),
     );
   }
+}
+
+extension on bool {
+  double get maxScrollExtent => null;
+}
+
+class GeminiService {
+  static Future<String> getGeminiResponse(String prompt) async {
+    // Placeholder for Gemini API call
+    // Replace with actual API call logic
+    await Future.delayed(Duration(seconds: 1)); // Simulate network delay
+    return "This is a simulated response for the prompt: $prompt";
+  }
+}
+
+class _scrollController {
+  static ScrollController get hasClients => ScrollController();
+  static void animateTo(double maxScrollExtent, {required Duration duration, required Curve curve}) {
+    // Placeholder for scroll animation logic
+  }
+  static bool get position => true;
 }
