@@ -801,6 +801,8 @@
 //     };
 //   }
 // }
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////
+library;
 
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -1001,7 +1003,7 @@ class CareerPredictionService {
       final accessToken = await _getFreshAccessToken();
       final predictionData = _formatUserDataForVertexAI(userProfile);
       
-      final url = 'https://$LOCATION-aiplatform.googleapis.com/v1/projects/$PROJECT_ID/locations/$LOCATION/endpoints/$ENDPOINT_ID:predict';
+      const url = 'https://$LOCATION-aiplatform.googleapis.com/v1/projects/$PROJECT_ID/locations/$LOCATION/endpoints/$ENDPOINT_ID:predict';
       
       print('🔗 Calling Vertex AI endpoint with fresh token...');
       print('📍 URL: $url');
@@ -1051,48 +1053,48 @@ class CareerPredictionService {
 
   // FIXED: Proper fresh token generation
   Future<String> _getFreshAccessToken() async {
-    try {
-      print('🔑 Generating fresh access token...');
-      
-      // Load service account credentials
-      final serviceAccountJson = {
-        "type": "service_account",
-        "project_id": "ai-life-navigator-27187",
-        "private_key_id": "ed9bf5417840fe5cade7c05254d4f8b21b0a9721",
-        "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC5z3kWfopWuIgB\n1wNtt+GbPPRAaeIu2tnqDeERSYBunH0IgNfhvoWZR9WaEesVorrWtmJWCQKzRJJp\n1anGh9tbiaQeOGnyjNb5hbezhlmNdxIUm0zR/2NkZ8UpTlV61ZS1CxaFMu1O97X8\nB7tanRLBqkhXw7Be88yc+OQ1a7/ixZ1fKQo1H0LrurEjFkuZqWvg7l6tddgvEHqa\n43eG72OjzndGIWsIS2dpCKPfXGOmBi1gpKvcQt0Ma2lmmAEuT1ngZ3ph0jLT7XJd\n5YeEZLhI6HWmVV1YaA8brdpUKf3l8aq4bJswSlLVu8w9UqlLzP1gg73ERlLddjWt\nGe1gyvTpAgMBAAECggEADmmo91U2btaeeiIO+oY+Yje+rHZqHH9OUujjsd8VLr9F\ntZCk7jZEj6iySWKlbQaz3m7EPu8w/e3OO5Zetm8YVUfeapeupClHjZBROQQtUxtO\n1DldopZgQ8wGz5bra31ArTBgfVF/ddYiEBwbbMJtT4dhWCluN1dK4kwuC3TBrBnM\n2X+a97uxucE9ONPW+Adcrt5620RYi0IVdhN76whqw10QG79N77B4g+ogUQlmAjDG\ndr5ulQ/dE2KlGa+FAoLEf6f0BPpN2igeNPCjro8IbvAbmk0VNor8R0Yc+7PilJwV\n2ktQepxhiDvmo5C+R7UKDSDrY8C5jMv9co/4wa2seQKBgQD6886V1Ssa6xBw5aBp\nYBKrcjdwROdkyaGlI3+jZB96cfyekgEkWVVN+5wKUd9PWNXdScRGkpns7Hu/UjAr\nmh35vJhamw/0yH58FIPOQdXdKLEsE8+krRmaCDdehkTfMexmETToNNW3p1YeAIbh\nZ6w1CnMPCmq8LhMorVo/EJ93HQKBgQC9jD1zEtiPxReU3XKrxLBfrmKk5aNVhzE1\nZGhJJO9/DIMv6Ogd17TZU4Hj2WTatiXUlTuHbnMsPal9ZQY6jBIz7bNkhRl5BFwI\nsKAcwmiiRaFxLy4Lrf2dbPs9/3Rz3Eynacvd5FKU2vsaKJUzDr2pvBGc/a+CXTlk\nPkx3995vPQKBgQDxSZx3OggBEMS1GEQ9LU+mIuKlAstNgAT5CAHAcxNFIvYW7SFF\n9tLrcSHeVkwVOcAfzb53cJupTtPI59hDBCMQLUJ7053q6R+cZAk7NtfPlkGLtNyw\nZHM6Q+4g546u34yBssehALQAqldF75HAhnLwaMSqUITBvLdVJCCihHQfDQKBgBF3\nVcY/y1LcL4MZMNLhKft3H0Hgoz9jWMZ5vR5YV/VWGtSUWqc9VD3ecw6i3qdEt5Gy\nOq0NIXHHMNIMOBm3BIpicfBmT2WWYECwveBIjcm+LtU2KsEKxF74RuJ8oqd2el3G\n4vFMc8uhrhfH+4+b4SA940WbHswdeQdisjsvzQBlAoGAbMIV8I5y2x6sgYKVZZs7\nG4DwKBjzeG0tiaktLl2kZuztrOhkpIP1vuw9DLE41go7bEF+d+ooUlvOq7Ubl2lx\nDt9JN8ShBxKqM/+aRRoG0Fw0T/b0MLzxZemCj+w9lc7ixpPqK87Jyuj6CrZyHgx2\n4iy1bWn6Dokj/yKsJf/xidk=\n-----END PRIVATE KEY-----\n",
-        "client_email": "ai-life-navigator-27187@appspot.gserviceaccount.com",
-        "client_id": "111278927099144047711",
-        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-        "token_uri": "https://oauth2.googleapis.com/token",
-        "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-        "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/ai-life-navigator-27187%40appspot.gserviceaccount.com",
-        "universe_domain": "googleapis.com"
-      };
-      
-      // Create credentials from JSON
-      final credentials = ServiceAccountCredentials.fromJson(serviceAccountJson);
-      
-      // Create authenticated HTTP client
-      final client = await clientViaServiceAccount(
-        credentials,
-        ['https://www.googleapis.com/auth/cloud-platform'],
-      );
-      
-      // Extract the access token
-      final accessToken = client.credentials.accessToken.data;
-      
-      // Close the client
-      client.close();
-      
-      print('✅ Fresh access token generated successfully');
-      print('🔑 Token preview: ${accessToken.substring(0, 20)}...');
-      
-      return accessToken;
-    } catch (e) {
-      print('❌ Failed to generate access token: $e');
-      throw Exception('Failed to get access token: $e');
-    }
+  try {
+    print('🔑 Generating fresh access token...');
+    
+    // Updated service account credentials with new private key
+    final serviceAccountJson = {
+      "type": "service_account",
+      "project_id": "ai-life-navigator-27187",
+      "private_key_id": "9448015ce6f4863caa3a222891bc0671a0b25a01",  // ✅ Updated
+      "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDJ2g4GYml9VdXB\nDcsgMaUs2Y6TddNTYTQAfAjYP2Kr7ImBQaKg9/7D/q6qrogRb7EAxgrmTCb+KDcr\n2D+3PB2yTXwN4ht5zEbX7P58WXOIN8wZHcxj4zZv1mvrI3T0VBSguLzPeo7H1NSy\nTw3XgEtVWxDL6Trmf1FFnoVbrOWs4+wG/gpGhf36hY+W0RGg0h3cJdtW3c3kMwT3\n7DmwS9GKxGkjWsQHO1XWSwXsWQ80ww41eLOB4bcXV1tnL/2S5OrR9jaXWnqvMBWE\nyDiP8kMszSbOD3zVbrpOvOoD8h8w3THik+0+TJNJtM0rHtvybQAjpvaZFHt6Q4/m\n22Da/me/AgMBAAECggEAAxBtSZhzHSwFa2UbTU08hN+JRBTeuIQkz1XjSB1AJBQa\nbsnd0jL1tgVWRAK04rZuXMrGB1NKIyIzaWRBiNalxD2nzoBLcNC5shGfekBmfH1G\nRs0u1bHeNY4675JJy6W3el+Ql9KHOOct/8ZHtKRHEROgEHui9EgHk096yoTeJ8X7\n3DO8B4cnBRtGcQR/t0A8i8FFv232MfZJr03FTV14YO5ean0jhSW2H9QGXD0Z4Usb\nevwuv9lzN5xMHgpn3+DaWXULjaXruGoaG1mMpSgocd5H2zcpJAEXRqZdF+553DtH\nqfkC4wHkCfUxZmUQCFhgv3GJZRjh7V+caPvBd7uK6QKBgQD6m9WvuZ6XSi7ESLsi\nIsXVy7qfzeNdKraMhnHtGjBkAKtw4OiiyMw2PZweqyPDK/FKhsVopQGHn48eCv/5\nzxmhxL5/wBQAdalzNZTKaZxNsokaPs9x2fyCQ99Xr7hhkxmMTQLrinamVGB9k1lI\npE9XsUTHI421dSlCe1/tuew3OQKBgQDOMbQJtodWRKCKxpuXX0vUcaMjEjC2WC5G\nLividZdE/UGKsTLNkxvn5AexMU6i5I4Id8hVE2yDMhZuHcRo+wCNzg70c+KOiI8v\n0u11qLWfVdqtCaTx0B0rVWx9A74lskkA6SQLQut+x1Bx3/Wrh/4z8O0QvKHz3doD\nijtv8bxetwKBgCI7Vx0Bxd/0ih7VsHohNdTWV0+s1/nJ89WOJ9GzWhjO3pw0nJJf\ny0U9dS3bQq9OOU9syVpZ77OO4AXCiuScnWuzbDIXEqRdbiAGmaRseKVEVeX33m42\n0H8atk9L+WuapEq92kBCUaK2s9dzYSbDCvN3i2WIPbsjndcu8xON6e5BAoGBAIU+\nHSeBqicXJd9HxFenHytjW5ZYNN5AUXbMc1NdxaixN19WbovlmkzZUBcy06vzoczb\nCrvfV2nYPiJeXgOw34TDOWrCUA7nNBAlb4luwh76rdrPtqUEZTUReI+4kXFuqjpK\nbh5Q2jkMt3E+1lRIBv6tm6QLIWSjYjSTaSFHxwA1AoGBAO6HAA9vtzS894DNA5w6\nQue8fa1gxV5ZMX0HQHJmK9aiJ9DHgCv4UHFgcHJBmlXOHH08FF+QsWhcr3OAQilW\n5+yH8dIeQ2g0ilyp9U9GMRoHuWnlR6qcEzn8AQZTFVS7EwQQwQxyeskIocbntD77\nBubomWHDUKSSYAbgyyo3XB6G\n-----END PRIVATE KEY-----\n",  // ✅ Updated
+      "client_email": "ai-life-navigator-27187@appspot.gserviceaccount.com",
+      "client_id": "111278927099144047711",
+      "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+      "token_uri": "https://oauth2.googleapis.com/token",
+      "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+      "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/ai-life-navigator-27187%40appspot.gserviceaccount.com",
+      "universe_domain": "googleapis.com"
+    };
+    
+    // Create credentials from JSON
+    final credentials = ServiceAccountCredentials.fromJson(serviceAccountJson);
+    
+    // Create authenticated HTTP client
+    final client = await clientViaServiceAccount(
+      credentials,
+      ['https://www.googleapis.com/auth/cloud-platform'],
+    );
+    
+    // Extract the access token
+    final accessToken = client.credentials.accessToken.data;
+    
+    // Close the client
+    client.close();
+    
+    print('✅ Fresh access token generated successfully');
+    print('🔑 Token preview: ${accessToken.substring(0, 20)}...');
+    
+    return accessToken;
+  } catch (e) {
+    print('❌ Failed to generate access token: $e');
+    throw Exception('Failed to get access token: $e');
   }
+}
 
   Map<String, dynamic> _formatUserDataForVertexAI(UserProfileData userProfile) {
   return {

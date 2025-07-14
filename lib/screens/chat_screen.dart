@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';  // Add this import
 import 'package:http/http.dart' as http;
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/gemini_service.dart';
@@ -213,7 +212,7 @@ class _ChatScreenState extends State<ChatScreen> {
         _proceedToNextQuestion();
       }
     } else {
-      _addMessage("👍 No problem! I'll provide excellent recommendations based on your responses.", false);
+      _addMessage("👍 I'll provide excellent recommendations based on your responses.", false);
       _proceedToNextQuestion();
     }
   }

@@ -62,7 +62,7 @@ class FirestoreService {
       });
     } catch (e) {
       print('Error saving chat session: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -111,7 +111,7 @@ class FirestoreService {
       });
     } catch (e) {
       print('Error saving LinkedIn analysis: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -133,7 +133,7 @@ class FirestoreService {
       });
     } catch (e) {
       print('Error saving internship recommendations: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -165,7 +165,7 @@ class FirestoreService {
           .set(profileData, SetOptions(merge: true));
     } catch (e) {
       print('Error saving user profile: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -219,7 +219,7 @@ class FirestoreService {
       });
     } catch (e) {
       print('Error saving career recommendation: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -285,7 +285,7 @@ class FirestoreService {
       };
     } catch (e) {
       print('Error generating career prediction: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -355,7 +355,7 @@ class FirestoreService {
       };
     } catch (e) {
       print('Error generating comprehensive analysis: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -377,7 +377,7 @@ class FirestoreService {
       });
     } catch (e) {
       print('Error marking recommendation as read: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -417,7 +417,7 @@ class FirestoreService {
       }
     } catch (e) {
       print('Error deleting recommendation: $e');
-      throw e;
+      rethrow;
     }
   }
 
@@ -464,7 +464,7 @@ class FirestoreService {
     }
 
     if (reasoningSentences.isNotEmpty) {
-      return reasoningSentences.take(5).join('. ').trim() + '.';
+      return '${reasoningSentences.take(5).join('. ').trim()}.';
     }
 
     // Enhanced fallback reasoning based on user profile
@@ -516,7 +516,7 @@ class FirestoreService {
       }
 
       if (reasoningSentences.isNotEmpty) {
-        return reasoningSentences.take(6).join('. ').trim() + '.';
+        return '${reasoningSentences.take(6).join('. ').trim()}.';
       }
     }
 
@@ -586,7 +586,7 @@ class FirestoreService {
       });
     } catch (e) {
       print('Error updating recommendation feedback: $e');
-      throw e;
+      rethrow;
     }
   }
 }

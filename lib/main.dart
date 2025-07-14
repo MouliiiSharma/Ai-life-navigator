@@ -13,7 +13,7 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  runApp(MyApp());
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
@@ -32,14 +32,14 @@ class MyApp extends StatelessWidget {
           elevation: 0,
         ),
       ),
-      home: AuthGate(),
+      home: const AuthGate(),
       debugShowCheckedModeBanner: false,
       // Add routes for navigation
       routes: {
-        '/login': (context) => AuthScreen(),
-        '/dashboard': (context) => Dashboard(),
-        '/settings': (context) => SettingsScreen(),
-        '/personal-details': (context) => PersonalDetailsScreen(),
+        '/login': (context) => const AuthScreen(),
+        '/dashboard': (context) => const Dashboard(),
+        '/settings': (context) => const SettingsScreen(),
+        '/personal-details': (context) => const PersonalDetailsScreen(),
         // Add more routes as needed
         // '/history': (context) => HistoryScreen(), // TODO: Create history screen
       },
@@ -64,7 +64,7 @@ class AuthGate extends StatelessWidget {
                   CircularProgressIndicator(
                     color: Colors.blue.shade600,
                   ),
-                  SizedBox(height: 16),
+                  const SizedBox(height: 16),
                   Text(
                     'AI Life Navigator',
                     style: TextStyle(
@@ -73,7 +73,7 @@ class AuthGate extends StatelessWidget {
                       color: Colors.blue.shade600,
                     ),
                   ),
-                  SizedBox(height: 8),
+                  const SizedBox(height: 8),
                   Text(
                     'Loading...',
                     style: TextStyle(
@@ -85,9 +85,9 @@ class AuthGate extends StatelessWidget {
             ),
           );
         } else if (snapshot.hasData) {
-          return Dashboard();
+          return const Dashboard();
         } else {
-          return AuthScreen();
+          return const AuthScreen();
         }
       },
     );

@@ -19,8 +19,8 @@ class _DashboardState extends State<Dashboard> {
   final List<Widget> _screens = [
     const PersonalDetailsScreen(),
     const AIAssistantScreen(),
-    CareerPredictionScreen(),
-    DeepDiveScreen(),
+    const CareerPredictionScreen(),
+    const DeepDiveScreen(),
     const SettingsScreen(),
   ];
 

@@ -1193,7 +1193,7 @@ class _DeepDiveScreenState extends State<DeepDiveScreen> {
     }
 
     if (reasoningSentences.isNotEmpty) {
-      return reasoningSentences.take(3).join('. ').trim() + '.';
+      return '${reasoningSentences.take(3).join('. ').trim()}.';
     }
 
     // Check user answers for context-based reasoning

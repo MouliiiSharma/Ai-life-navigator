@@ -86,18 +86,18 @@ class _CareerPredictionScreenState extends State<CareerPredictionScreen> {
   }
 
   Widget _buildLoadingScreen() {
-    return Center(
+    return const Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const CircularProgressIndicator(),
-          const SizedBox(height: 20),
-          const Text(
+          CircularProgressIndicator(),
+          SizedBox(height: 20),
+          Text(
             '🤖 AI is analyzing your profile...',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
-          const SizedBox(height: 10),
-          const Text(
+          SizedBox(height: 10),
+          Text(
             'Using Google Vertex AI AutoML',
             style: TextStyle(fontSize: 14, color: Colors.grey),
           ),
@@ -211,12 +211,12 @@ class _CareerPredictionScreenState extends State<CareerPredictionScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   elevation: 3,
                 ),
-                child: Row(
+                child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.psychology),
-                    const SizedBox(width: 8),
-                    const Text(
+                    Icon(Icons.psychology),
+                    SizedBox(width: 8),
+                    Text(
                       'Get AI Career Prediction',
                       style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                     ),
