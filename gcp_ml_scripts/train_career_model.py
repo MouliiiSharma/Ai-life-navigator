@@ -1,5 +1,7 @@
 from google.cloud import aiplatform
 import time
+from secrets import PROJECT_ID, LOCATION, DATASET_GCS_PATH, MODEL_DISPLAY_NAME
+
 
 def create_automl_tabular_training_job(
     project_id: str,
@@ -210,19 +212,13 @@ def check_dataset_and_permissions(project_id: str, location: str, dataset_gcs_pa
 
 # Example usage
 if __name__ == "__main__":
-    # Configuration
-    PROJECT_ID = "ai-life-navigator-27187"
-    LOCATION = "us-central1"
-    DATASET_GCS_PATH = "gs://ai-life-navigator-career-data/career_dataset.csv"
-    MODEL_DISPLAY_NAME = "career-prediction-model"
-    
     # Check dataset first
     dataset_ok = check_dataset_and_permissions(PROJECT_ID, LOCATION, DATASET_GCS_PATH)
-    
+
     if not dataset_ok:
         print("❌ Please fix dataset issues before proceeding")
         exit(1)
-    
+
     # Start training
     print("\n🚀 Starting training job...")
     training_job, model = create_automl_tabular_training_job(
@@ -231,10 +227,10 @@ if __name__ == "__main__":
         dataset_gcs_path=DATASET_GCS_PATH,
         model_display_name=MODEL_DISPLAY_NAME,
     )
-    
+
     # List jobs to verify
     list_training_jobs(PROJECT_ID, LOCATION)
-    
+
     if training_job:
         print(f"\n✅ SUCCESS! Training job created.")
         print(f"Monitor at: https://console.cloud.google.com/vertex-ai?project={PROJECT_ID}")

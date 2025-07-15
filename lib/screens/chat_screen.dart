@@ -1,11 +1,12 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter/gestures.dart';  // Add this import
+import 'package:flutter/gestures.dart';  
 import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/gemini_service.dart';
 import '../services/firestore_service.dart';
+import 'package:ai_life_navigator/secrets.dart';
 
 
 class ChatScreen extends StatefulWidget {
@@ -29,9 +30,9 @@ class _ChatScreenState extends State<ChatScreen> {
   Map<String, dynamic>? _linkedInData;
   
   // API Keys
-  static const String _rapidApiKey = '47026e8cd8mshe608e5ef002f184p15c68fjsne74e4980964d';
+  static const String _rapidApiKey = Secrets.rapidApiKey;
   static const String _linkedInApiHost = 'fresh-linkedin-profile-data.p.rapidapi.com';
-  static const String _youtubeApiKey = 'AIzaSyCJ8MC7K87Kt-uvUrzRQ1mnWs1iQ7_QawM';
+  static const String _youtubeApiKey = Secrets.youtubeApiKey;
 
   // Your specific questions
   final List<String> _questions = [

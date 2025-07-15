@@ -6,13 +6,14 @@ const admin = require("firebase-admin");
 const cors = require("cors")({ origin: true });
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { PredictionServiceClient } = require('@google-cloud/aiplatform');
+const secrets = require('./node-secrets');
 
 // Set global options for all functions
 setGlobalOptions({
   maxInstances: 10,
   timeoutSeconds: 540,
   memory: "1GiB",
-  region: "us-central1",
+  region: Location,
 });
 
 // Initialize Firebase Admin
@@ -21,13 +22,13 @@ if (!admin.apps.length) {
 }
 
 const db = admin.firestore();
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "AIzaSyAolU9wBgaWS0Gt7HAWIpDKXlc695_mlzU");
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || securityRules.geminiApiKey);
 const client = new PredictionServiceClient();
 
 // AutoML model configuration
-const PROJECT_ID = process.env.PROJECT_ID || 'ai-life-navigator-27187';
-const ENDPOINT_ID = process.env.ENDPOINT_ID || '8199257219930259456';
-const LOCATION = process.env.LOCATION || 'us-central1';
+const PROJECT_ID = process.env.PROJECT_ID || admin.securityRules.vertexProjectId;
+const ENDPOINT_ID = process.env.ENDPOINT_ID || admin.securityRules.vertexEndpointI;
+const LOCATION = process.env.LOCATION || admin.securityRules.vertexLocation;
 
 // ===========================================
 // MAIN CAREER PREDICTION FUNCTION (Enhanced with AutoML)

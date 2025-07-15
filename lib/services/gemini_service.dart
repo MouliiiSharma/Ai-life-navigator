@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:ai_life_navigator/secrets.dart';
+
 
 // Response Models
 class EnhancedChatResponse {
@@ -162,9 +164,9 @@ class UserProfile {
 }
 
 class EnhancedGeminiService {
-  static const String _geminiApiKey = 'AIzaSyAolU9wBgaWS0Gt7HAWIpDKXlc695_mlzU';
-  static const String _youtubeApiKey = 'AIzaSyCJ8MC7K87Kt-uvUrzRQ1mnWs1iQ7_QawM';
-  static const String _rapidApiKey = '47026e8cd8mshe608e5ef002f184p15c68fjsne74e4980964d';
+  static const String _geminiApiKey= Secrets.geminiApiKey;
+  static const String _youtubeApiKey = Secrets.youtubeApiKey;
+  static const String _rapidApiKey = Secrets.rapidApiKey;
   
   static const String _geminiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=$_geminiApiKey';
   static const String _youtubeUrl = 'https://www.googleapis.com/youtube/v3/search';
