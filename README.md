@@ -1,3 +1,4 @@
+HEAD
 # ai_life_navigator
 
 A new Flutter project.
@@ -14,3 +15,6 @@ A few resources to get you started if this is your first Flutter project:
 For help getting started with Flutter development, view the
 [online documentation](https://docs.flutter.dev/), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
+=======
+# Ai-life-navigator
+ 4a59f1497acc5db824da14acc8d31617429300aa
