@@ -1,5 +1,4 @@
 
-library;
 
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -8,7 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:ai_life_navigator/secrets.dart';
 
-// Data Models (keep your existing ones)
+// Data Models
 class UserProfileData {
   final int userAge;
   final String userGender;
@@ -141,18 +140,15 @@ class CareerPredictionResult {
   }
 }
 
-// FIXED Main Service Class
+// SECURE Main Service Class using Secrets
 class CareerPredictionService {
-  static const String PROJECT_ID = Secrets.vertexProjectId;
-  static const String LOCATION = Secrets.vertexLocation;
-  static const String ENDPOINT_ID = Secrets.vertexEndpointId;
-  static const String MODEL_ID = Secrets.vertexModelId;
+  // UPDATED: Use Secrets class for configuration
+  static String get _projectId => Secrets.vertexProjectId;
+  static String get _location => Secrets.vertexLocation;
+  static String get _endpointId => Secrets.vertexEndpointId;
   
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  
-  // Cache for service account credentials
-  ServiceAccountCredentials? _cachedCredentials;
 
   Future<CareerPredictionResult> predictCareer(UserProfileData userProfile) async {
     try {
@@ -161,7 +157,6 @@ class CareerPredictionService {
 
       print('🤖 Starting Vertex AI prediction...');
       
-      // Try Vertex AI prediction with proper token refresh
       try {
         final vertexPredictions = await _callVertexAIEndpointWithFreshToken(userProfile);
         final predictions = _convertVertexAIResponse(vertexPredictions, userProfile);
@@ -174,7 +169,6 @@ class CareerPredictionService {
           success: true,
         );
 
-        // Save to Firestore
         await _firestore
             .collection('users')
             .doc(user.uid)
@@ -194,17 +188,14 @@ class CareerPredictionService {
     }
   }
 
-  // FIXED: Proper token generation with fresh tokens
   Future<Map<String, dynamic>> _callVertexAIEndpointWithFreshToken(UserProfileData userProfile) async {
     try {
-      // Generate fresh access token for each request
       final accessToken = await _getFreshAccessToken();
       final predictionData = _formatUserDataForVertexAI(userProfile);
       
-      const url = 'https://$LOCATION-aiplatform.googleapis.com/v1/projects/$PROJECT_ID/locations/$LOCATION/endpoints/$ENDPOINT_ID:predict';
+      final url = 'https://$_location-aiplatform.googleapis.com/v1/projects/$_projectId/locations/$_location/endpoints/$_endpointId:predict';
       
       print('🔗 Calling Vertex AI endpoint with fresh token...');
-      print('📍 URL: $url');
       
       final response = await http.post(
         Uri.parse(url),
@@ -219,29 +210,14 @@ class CareerPredictionService {
       );
 
       print('📡 Vertex AI response status: ${response.statusCode}');
-      print('📡 Response headers: ${response.headers}');
 
       if (response.statusCode == 200) {
         final responseData = jsonDecode(response.body);
         print('✅ Vertex AI response received successfully');
-        print('📄 Response data keys: ${responseData.keys}');
         return responseData;
       } else {
-        print('❌ Vertex AI API error details:');
-        print('   Status: ${response.statusCode}');
-        print('   Body: ${response.body}');
-        print('   Headers: ${response.headers}');
-        
-        // Specific error handling
-        if (response.statusCode == 401) {
-          throw Exception('Authentication failed - token may be invalid or expired');
-        } else if (response.statusCode == 403) {
-          throw Exception('Access forbidden - check service account permissions and API enablement');
-        } else if (response.statusCode == 404) {
-          throw Exception('Endpoint not found - verify PROJECT_ID, LOCATION, and ENDPOINT_ID');
-        } else {
-          throw Exception('Vertex AI API error: ${response.statusCode} - ${response.body}');
-        }
+        print('❌ Vertex AI API error: ${response.statusCode} - ${response.body}');
+        throw Exception('Vertex AI API error: ${response.statusCode} - ${response.body}');
       }
     } catch (e) {
       print('❌ Vertex AI call failed: $e');
@@ -249,16 +225,15 @@ class CareerPredictionService {
     }
   }
 
-  // FIXED: Proper fresh token generation
+  // UPDATED: Secure service account credentials from Secrets class
   Future<String> _getFreshAccessToken() async {
   try {
     print('🔑 Generating fresh access token...');
     
-    // Updated service account credentials with new private key
     final serviceAccountJson = {
       "type": "service_account",
       "project_id": Secrets.vertexProjectId,
-      "private_key_id": Secrets.vertexServiceAccountPrivateKeyId,  
+      "private_key_id": Secrets.vertexServiceAccountPrivateKeyId,
       "private_key": Secrets.vertexServiceAccountPrivateKey,
       "client_email": Secrets.client_email,
       "client_id": Secrets.client_id,
@@ -269,41 +244,49 @@ class CareerPredictionService {
       "universe_domain": "googleapis.com"
     };
     
-    // Create credentials from JSON
-    final credentials = ServiceAccountCredentials.fromJson(serviceAccountJson);
+    // Validate that all required fields are present
+    if (serviceAccountJson['private_key'] == null || 
+        serviceAccountJson['private_key']!.isEmpty ||
+        !serviceAccountJson['private_key']!.contains('BEGIN PRIVATE KEY')) {
+      throw Exception('Invalid or missing private key in service account JSON');
+    }
     
-    // Create authenticated HTTP client
+    final credentials = ServiceAccountCredentials.fromJson(serviceAccountJson);
     final client = await clientViaServiceAccount(
       credentials,
       ['https://www.googleapis.com/auth/cloud-platform'],
     );
     
-    // Extract the access token
     final accessToken = client.credentials.accessToken.data;
-    
-    // Close the client
     client.close();
     
     print('✅ Fresh access token generated successfully');
-    print('🔑 Token preview: ${accessToken.substring(0, 20)}...');
-    
     return accessToken;
   } catch (e) {
     print('❌ Failed to generate access token: $e');
-    throw Exception('Failed to get access token: $e');
+    
+    // Provide specific error messages
+    if (e.toString().contains('invalid_grant')) {
+      throw Exception('JWT signature validation failed - service account key may be corrupted or expired');
+    } else if (e.toString().contains('private_key')) {
+      throw Exception('Private key format error - ensure PEM markers are correct');
+    } else {
+      throw Exception('Authentication failed: $e');
+    }
   }
 }
 
+
   Map<String, dynamic> _formatUserDataForVertexAI(UserProfileData userProfile) {
   return {
-    // Basic demographic data - convert to strings to match AutoML schema
+    // Basic info
     'age': userProfile.userAge.toString(),
-    'gender': userProfile.userGender,  // Already a string
+    'gender': userProfile.userGender,
     'cgpa': userProfile.userCgpa.toString(),
     'year_of_study': userProfile.userYearOfStudy.toString(),
-    'branch': userProfile.userBranch,  // Already a string
+    'branch': userProfile.userBranch,
     
-    // Skills - convert to string format matching your training data (1-5 scale)
+    // All skills from training data (1-5 scale as strings)
     'skill_programming': (userProfile.userSkills['Programming'] ?? 5).toString(),
     'skill_mathematics': (userProfile.userSkills['Mathematics'] ?? 5).toString(),
     'skill_communication': (userProfile.userSkills['Communication'] ?? 5).toString(),
@@ -315,7 +298,7 @@ class CareerPredictionService {
     'skill_technical_writing': (userProfile.userSkills['Technical Writing'] ?? 5).toString(),
     'skill_presentation': (userProfile.userSkills['Presentation'] ?? 5).toString(),
     
-    // Interests - convert to string format (1-5 scale)
+    // All interests from training data (1-5 scale as strings)
     'interest_technology': (userProfile.userInterests['Technology'] ?? 5).toString(),
     'interest_research': (userProfile.userInterests['Research'] ?? 5).toString(),
     'interest_business': (userProfile.userInterests['Business'] ?? 5).toString(),
@@ -326,7 +309,7 @@ class CareerPredictionService {
     'interest_user_experience': (userProfile.userInterests['User Experience'] ?? 5).toString(),
     'interest_security': (userProfile.userInterests['Security'] ?? 5).toString(),
     
-    // Personality traits - convert to string format (1-5 scale)
+    // Personality traits (1-5 scale as strings)
     'extroversion': (userProfile.userPersonality['Extroversion'] ?? 5).toString(),
     'openness': (userProfile.userPersonality['Openness'] ?? 5).toString(),
     'conscientiousness': (userProfile.userPersonality['Conscientiousness'] ?? 5).toString(),
@@ -336,19 +319,16 @@ class CareerPredictionService {
 }
 
 
-
   List<CareerPrediction> _convertVertexAIResponse(Map<String, dynamic> vertexResponse, UserProfileData userProfile) {
     List<CareerPrediction> predictions = [];
     
     try {
       print('🔍 Processing Vertex AI response...');
-      print('📄 Response structure: ${vertexResponse.keys}');
       
       final vertexPredictions = vertexResponse['predictions'] as List;
       
       if (vertexPredictions.isNotEmpty) {
         final prediction = vertexPredictions[0];
-        print('📊 Prediction structure: ${prediction.keys}');
         
         String predictedCareer;
         double confidence;
@@ -356,9 +336,6 @@ class CareerPredictionService {
         if (prediction.containsKey('classes') && prediction.containsKey('scores')) {
           List<String> classes = List<String>.from(prediction['classes']);
           List<double> scores = List<double>.from(prediction['scores']);
-          
-          print('🎯 Classes: $classes');
-          print('📊 Scores: $scores');
           
           int maxIndex = 0;
           double maxScore = scores[0];
@@ -411,7 +388,6 @@ class CareerPredictionService {
           ));
         }
         
-        // Add management alternatives if user has management skills
         if (userProfile.userSkills['Management'] != null && userProfile.userSkills['Management']! >= 7) {
           predictions.addAll(_getManagementAlternatives(userProfile));
         }
@@ -432,7 +408,7 @@ class CareerPredictionService {
     return predictions;
   }
 
-  // Helper methods (keep your existing ones)
+  // Helper methods for career data
   double _getSalaryRange(String career) {
     final salaryMap = {
       'Data Scientist': 15.0,
@@ -576,7 +552,7 @@ class CareerPredictionService {
     return CareerPredictionResult(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       predictions: fallbackPredictions,
-      explanation: 'Prediction generated using enhanced fallback system due to AI service unavailability. Please check your internet connection and try again later for AI-powered predictions.',
+      explanation: 'Prediction generated using enhanced fallback system due to AI service unavailability.',
       timestamp: DateTime.now(),
       success: false,
     );
@@ -606,7 +582,6 @@ class CareerPredictionService {
     return sortedSkills.take(3).map((e) => e.key).join(', ');
   }
 
-  // Stream predictions for history
   Stream<List<CareerPredictionResult>> streamPredictions() {
     final user = _auth.currentUser;
     if (user == null) return Stream.value([]);
